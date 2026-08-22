@@ -1,0 +1,218 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:chrome="using:Avalonia.Controls.Chrome"
+             xmlns:lucide="using:Lucide.Avalonia"
+             xmlns:templates="using:Avalonia.Markup.Xaml.Templates"
+             x:Class="TSM.App"
+             RequestedThemeVariant="Dark">
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="/Assets/tsm-tray.ico" ToolTipText="TSM Desktop"
+                IsVisible="False" Clicked="ShowWindowFromTray">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Show TradeSkillMaster" Click="ShowWindowFromTray" />
+            <NativeMenuItem Header="Refresh data now" Click="RefreshFromTray" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Quit" Click="QuitFromTray" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
+
+  <Application.Resources>
+    <Color x:Key="AppBackground">#151515</Color>
+    <Color x:Key="PanelBackground">#1B1B1B</Color>
+    <Color x:Key="PanelRaised">#222222</Color>
+    <Color x:Key="BorderColor">#343434</Color>
+    <Color x:Key="AccentColor">#E99525</Color>
+    <Color x:Key="AccentHoverColor">#F3A43B</Color>
+    <Color x:Key="MutedTextColor">#9A9A9A</Color>
+    <Color x:Key="SuccessColor">#69C58F</Color>
+    <Color x:Key="DangerColor">#FCA5A5</Color>
+    <SolidColorBrush x:Key="AppBackgroundBrush" Color="{StaticResource AppBackground}" />
+    <SolidColorBrush x:Key="PanelBackgroundBrush" Color="{StaticResource PanelBackground}" />
+    <SolidColorBrush x:Key="PanelRaisedBrush" Color="{StaticResource PanelRaised}" />
+    <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}" />
+    <SolidColorBrush x:Key="MutedTextBrush" Color="{StaticResource MutedTextColor}" />
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
+
+    <ControlTheme x:Key="TsmWindowDecorations" TargetType="chrome:WindowDrawnDecorations">
+      <Setter Property="DefaultTitleBarHeight" Value="40" />
+      <Setter Property="DefaultFrameThickness" Value="1" />
+      <Setter Property="DefaultShadowThickness" Value="0" />
+      <Setter Property="Template">
+        <templates:WindowDrawnDecorationsTemplate>
+          <chrome:WindowDrawnDecorationsContent>
+            <chrome:WindowDrawnDecorationsContent.Underlay>
+              <Border Margin="{TemplateBinding ShadowThickness}"
+                      Background="{StaticResource AppBackgroundBrush}"
+                      BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="{TemplateBinding FrameThickness}"
+                      BoxShadow="0 8 32 0 #50000000" />
+            </chrome:WindowDrawnDecorationsContent.Underlay>
+            <chrome:WindowDrawnDecorationsContent.Overlay>
+              <Grid Height="{TemplateBinding TitleBarHeight}"
+                    Margin="{TemplateBinding ShadowThickness}"
+                    VerticalAlignment="Top" ColumnDefinitions="*,Auto"
+                    Background="#181818">
+                <Grid Background="Transparent"
+                      chrome:WindowDecorationProperties.ElementRole="TitleBar">
+                  <StackPanel Orientation="Horizontal" Margin="12,0" Spacing="9"
+                              VerticalAlignment="Center">
+                    <Image Width="18" Height="18" Source="/Assets/tsm-app.png" />
+                    <TextBlock Text="{TemplateBinding Title}" Foreground="#F1F5F9"
+                               FontSize="12" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                            chrome:WindowDecorationProperties.ElementRole="DecorationsElement">
+                  <Button x:Name="PART_MinimizeButton" Classes="drawn-caption"
+                          chrome:WindowDecorationProperties.ElementRole="MinimizeButton">
+                    <lucide:LucideIcon Kind="Minus" Size="15" StrokeWidth="1.8" />
+                  </Button>
+                  <Button x:Name="PART_MaximizeButton" Classes="drawn-caption"
+                          chrome:WindowDecorationProperties.ElementRole="MaximizeButton">
+                    <Grid>
+                      <lucide:LucideIcon Classes="maximize-glyph" Kind="Square" Size="13" StrokeWidth="1.8" />
+                      <lucide:LucideIcon Classes="restore-glyph" Kind="Copy" Size="13" StrokeWidth="1.8" IsVisible="False" />
+                    </Grid>
+                  </Button>
+                  <Button x:Name="PART_CloseButton" Classes="drawn-caption close"
+                          chrome:WindowDecorationProperties.ElementRole="CloseButton">
+                    <lucide:LucideIcon Kind="X" Size="16" StrokeWidth="1.8" />
+                  </Button>
+                </StackPanel>
+                <Border Grid.ColumnSpan="2" Height="1" VerticalAlignment="Bottom"
+                        Background="{StaticResource BorderBrush}" IsHitTestVisible="False" />
+              </Grid>
+            </chrome:WindowDrawnDecorationsContent.Overlay>
+          </chrome:WindowDrawnDecorationsContent>
+        </templates:WindowDrawnDecorationsTemplate>
+      </Setter>
+      <Style Selector="^:maximized /template/ Control.maximize-glyph">
+        <Setter Property="IsVisible" Value="False" />
+      </Style>
+      <Style Selector="^:maximized /template/ Control.restore-glyph">
+        <Setter Property="IsVisible" Value="True" />
+      </Style>
+    </ControlTheme>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#E99525" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{StaticResource AppBackgroundBrush}" />
+    </Style>
+    <Style Selector="Button">
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="12,5" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="#242424" />
+      <Setter Property="Foreground" Value="#E8E8E8" />
+      <Setter Property="BorderBrush" Value="#3B3B3B" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2D2D2D" />
+    </Style>
+    <Style Selector="Button:focus-visible">
+      <Setter Property="BorderBrush" Value="#F2B84B" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="#B96F13" />
+      <Setter Property="BorderBrush" Value="#D58C24" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#C98316" />
+    </Style>
+    <Style Selector="Button.danger">
+      <Setter Property="Background" Value="#8F312C" />
+      <Setter Property="BorderBrush" Value="#B84A43" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#A83B35" />
+    </Style>
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    </Style>
+    <Style Selector="Button.drawn-caption">
+      <Setter Property="Width" Value="46" />
+      <Setter Property="Height" Value="40" />
+      <Setter Property="MinHeight" Value="40" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="#181818" />
+      <Setter Property="Foreground" Value="#D7DCE4" />
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.drawn-caption:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2D2D2D" />
+    </Style>
+    <Style Selector="Button.drawn-caption.close:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#C42B1C" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#F1F1F0" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#E9E9E8" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.field-label">
+      <Setter Property="Foreground" Value="#A7AAAD" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Background" Value="{StaticResource PanelRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBox:focus-visible">
+      <Setter Property="BorderBrush" Value="#F2B84B" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Background" Value="{StaticResource PanelRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Padding" Value="8,5" />
+    </Style>
+    <Style Selector="ComboBox:focus-visible">
+      <Setter Property="BorderBrush" Value="#F2B84B" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="Padding" Value="13,8" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </Application.Styles>
+</Application>

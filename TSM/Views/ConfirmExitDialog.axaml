@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lucide="using:Lucide.Avalonia"
+        x:Class="TSM.Views.ConfirmExitDialog"
+        Title="Exit TradeSkillMaster"
+        Width="420" Height="178"
+        CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        WindowDecorationsTheme="{StaticResource TsmWindowDecorations}"
+        Background="{StaticResource AppBackgroundBrush}">
+  <Grid RowDefinitions="*,Auto" Margin="18">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+      <lucide:LucideIcon Kind="CircleAlert" Size="25" StrokeWidth="1.7"
+                         Foreground="#FCD38D" VerticalAlignment="Top" />
+      <StackPanel Grid.Column="1" Spacing="5">
+        <TextBlock Text="Exit TradeSkillMaster?" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Text="Automatic data checks will stop until the application is started again."
+                   Classes="muted" FontSize="10" TextWrapping="Wrap" />
+      </StackPanel>
+    </Grid>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Classes="ghost" Content="Cancel" Click="CancelClick" />
+      <Button Classes="primary" Content="Exit" Click="ExitClick" />
+    </StackPanel>
+  </Grid>
+</Window>

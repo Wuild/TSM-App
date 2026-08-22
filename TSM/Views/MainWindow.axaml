@@ -1,0 +1,1221 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TSM.ViewModels"
+        xmlns:lucide="using:Lucide.Avalonia"
+        xmlns:controls="using:TSM.Controls"
+        x:Class="TSM.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="TSM Desktop"
+        Icon="/Assets/tsm-app.ico"
+        Width="1200" Height="780"
+        MinWidth="1000" MinHeight="680"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource AppBackgroundBrush}">
+
+  <Window.Styles>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#191919" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+    </Style>
+    <Style Selector="Border.workspace">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Border.subtle-card">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="ToggleButton.nav">
+      <Setter Property="Height" Value="46" />
+      <Setter Property="MinHeight" Value="46" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+      <Setter Property="Foreground" Value="#AAAAAA" />
+    </Style>
+    <Style Selector="ToggleButton.nav:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#202020" />
+      <Setter Property="Foreground" Value="#F0F0EF" />
+    </Style>
+    <Style Selector="ToggleButton.nav:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="#25211C" />
+      <Setter Property="Foreground" Value="#E8E9E9" />
+    </Style>
+    <Style Selector="ToggleButton.nav:checked">
+      <Setter Property="BorderBrush" Value="#F5A623" />
+      <Setter Property="Padding" Value="11,0,14,0" />
+    </Style>
+    <Style Selector="Button.icon">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="MinHeight" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="3" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.text-link">
+      <Setter Property="MinHeight" Value="16" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="#E99525" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="HorizontalContentAlignment" Value="Right" />
+    </Style>
+    <Style Selector="Button.text-link:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#F2B84B" />
+    </Style>
+    <Style Selector="Button.sort-header">
+      <Setter Property="Height" Value="38" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Button.sort-header:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#292929" />
+    </Style>
+    <Style Selector="Button.sort-header TextBlock.sort-arrow">
+      <Setter Property="Foreground" Value="#F5A623" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="ListBox.realm-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.realm-list > ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.realm-list > ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="#252D2D" />
+    </Style>
+    <Style Selector="ListBox.auction-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.auction-list > ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.auction-list > ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#22201D" />
+    </Style>
+    <Style Selector="ListBox.auction-list > ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2A241B" />
+    </Style>
+    <Style Selector="ListBox.auction-list > ListBoxItem:selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#30281D" />
+    </Style>
+    <Style Selector="TabItem.settings-tab">
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Normal" />
+      <Setter Property="MinWidth" Value="88" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="TabItem.settings-tab:selected">
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+  </Window.Styles>
+
+  <Grid>
+    <Grid IsVisible="{Binding IsShellVisible}" ColumnDefinitions="224,*">
+      <Border Background="#181818" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="10">
+          <StackPanel Spacing="10" Margin="6,10,6,22">
+            <StackPanel Orientation="Horizontal" Spacing="11">
+              <Image Width="36" Height="36" Source="/Assets/tsm-app.png" />
+              <StackPanel VerticalAlignment="Center" Spacing="0">
+                <TextBlock Text="TSM Desktop" FontSize="15" FontWeight="SemiBold" Foreground="#EEEEEE" />
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" Spacing="4">
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsRealmDataSelected, Mode=OneWay}"
+                          Command="{Binding ShowRealmDataCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="Database" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Realm data" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsAddonVersionsSelected, Mode=OneWay}"
+                          Command="{Binding ShowAddonVersionsCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="Package" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Addons" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsAuctionHouseSelected, Mode=OneWay}"
+                          Command="{Binding ShowAuctionHouseCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="Search" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Auction House" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsAccountingSelected, Mode=OneWay}"
+                          Command="{Binding ShowAccountingCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="FileSpreadsheet" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Accounting export" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+          </StackPanel>
+
+          <StackPanel Grid.Row="2" Spacing="8">
+            <Border Height="1" Background="{StaticResource BorderBrush}" Margin="4,0" />
+            <ToggleButton Classes="nav" IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
+                          Command="{Binding OpenSettingsCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="Settings" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Settings" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Grid Grid.Column="1" RowDefinitions="52,*">
+        <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,0">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+            <TextBlock Text="{Binding CurrentPageTitle}" FontSize="14" FontWeight="SemiBold"
+                       Foreground="#EFEFEE" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding StatusDetail}" Classes="muted" FontSize="10"
+                       Margin="4,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Border Grid.Column="2" Padding="8,4" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Border Width="7" Height="7" CornerRadius="4" Background="{Binding LastSyncColor}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding LastSyncText}" Foreground="{Binding LastSyncColor}" FontSize="9"
+                           FontWeight="SemiBold" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+            <Button Grid.Column="3" Content="Add realm" Command="{Binding OpenSettingsCommand}"
+                    IsVisible="{Binding IsRealmDataSelected}" />
+            <Button Grid.Column="4" Content="Done" Command="{Binding CloseSettingsCommand}"
+                    IsVisible="{Binding IsSettingsOpen}" />
+            <Button Grid.Column="5" Classes="icon" Command="{Binding RefreshCommand}"
+                    IsEnabled="{Binding IsLoggedIn}" ToolTip.Tip="Refresh data">
+              <lucide:LucideIcon Kind="RefreshCw" Size="16" StrokeWidth="1.8" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" IsVisible="{Binding IsContentVisible}">
+          <Grid IsVisible="{Binding IsRealmDataSelected}">
+            <Border Classes="card workspace" ClipToBounds="True">
+              <Grid RowDefinitions="38,*">
+                <Border Background="#202020" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,0">
+                  <Grid ColumnDefinitions="1.8*,1.05*,1.05*,*,*,1.25*,42">
+                    <TextBlock Text="REGION / REALM" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="WOW FLAVOR" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="CLIENT" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="AUCTIONDB" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4" Text="GREAT DEALS" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="5" Text="LAST UPDATED" Classes="field-label" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+                <ListBox Grid.Row="1" Classes="realm-list" ItemsSource="{Binding RealmStatuses}"
+                         SelectedItem="{Binding SelectedRealmStatus}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="16,12">
+                        <Grid ColumnDefinitions="1.8*,1.05*,1.05*,*,*,1.25*,42">
+                          <StackPanel Orientation="Horizontal" Spacing="9">
+                            <Border Width="8" Height="8" CornerRadius="4" Background="{Binding StatusColor}"
+                                    VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding RegionRealm}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="1" Text="{Binding Flavor}" VerticalAlignment="Center" FontSize="11" />
+                          <TextBlock Grid.Column="2" Text="{Binding InstallationStatus}" Foreground="{Binding InstallationColor}"
+                                     VerticalAlignment="Center" FontSize="10" FontWeight="SemiBold" />
+                          <TextBlock Grid.Column="3" Text="{Binding AuctionDb}" Foreground="{Binding StatusColor}" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="4" Text="{Binding GreatDeals}" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="5" Text="{Binding LastUpdated}" Classes="muted" VerticalAlignment="Center" />
+                          <Button Grid.Column="6" Classes="icon" Width="30" Height="30" MinHeight="30"
+                                  ToolTip.Tip="Manage realm" Click="OpenRealmMenu">
+                            <TextBlock Text="⋯" FontSize="17" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          </Button>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </Grid>
+            </Border>
+          </Grid>
+
+          <Grid IsVisible="{Binding IsAuctionHouseSelected}" RowDefinitions="Auto,*">
+            <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                    Padding="12,8">
+              <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,230,130,Auto,Auto,Auto" ColumnSpacing="10">
+                <TextBox Text="{Binding AuctionSearchText}" PlaceholderText="Search item name or ID…" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding AuctionRealmOptions}"
+                          SelectedItem="{Binding SelectedAuctionRealm}" PlaceholderText="All realms"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                <ComboBox Grid.Column="2" ItemsSource="{Binding AuctionFactionOptions}"
+                          SelectedItem="{Binding SelectedAuctionFaction}"
+                          HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                <Button Grid.Column="3" Command="{Binding ToggleAuctionFavoritesFilterCommand}"
+                        Padding="11,0" ToolTip.Tip="Show only favorited items">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <lucide:LucideIcon Kind="Star" Size="15" StrokeWidth="1.8" VerticalAlignment="Center"
+                                       Foreground="{Binding AuctionFavoritesFilterColor}" />
+                    <TextBlock Text="{Binding AuctionFavoritesLabel}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button Grid.Column="4" Command="{Binding ToggleAdvancedAuctionSearchCommand}"
+                        Padding="11,0" ToolTip.Tip="Filter by item category, subcategory, and quality">
+                  <StackPanel Orientation="Horizontal" Spacing="7">
+                    <lucide:LucideIcon Kind="ListFilter" Size="15" StrokeWidth="1.8" VerticalAlignment="Center" />
+                    <TextBlock Text="Advanced" VerticalAlignment="Center" />
+                  </StackPanel>
+                </Button>
+                <Button Grid.Column="5" Classes="icon" Command="{Binding RefreshAuctionIndexCommand}"
+                        ToolTip.Tip="Rebuild local auction index">
+                  <lucide:LucideIcon Kind="RefreshCw" Size="16" StrokeWidth="1.8" />
+                </Button>
+                <Grid Grid.Row="1" Grid.ColumnSpan="6" Margin="0,10,0,2"
+                      RowDefinitions="Auto,Auto" ColumnDefinitions="*,*,*,Auto" ColumnSpacing="10"
+                      IsVisible="{Binding IsAdvancedAuctionSearchOpen}">
+                  <StackPanel Spacing="5">
+                    <TextBlock Text="CATEGORY" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding AuctionCategoryOptions}"
+                              SelectedItem="{Binding SelectedAuctionCategory}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="5">
+                    <TextBlock Text="SUBCATEGORY" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding AuctionSubcategoryOptions}"
+                              SelectedItem="{Binding SelectedAuctionSubcategory}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="2" Spacing="5">
+                    <TextBlock Text="QUALITY" Classes="field-label" />
+                    <ComboBox ItemsSource="{Binding AuctionQualityOptions}"
+                              SelectedItem="{Binding SelectedAuctionQuality}"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  </StackPanel>
+                  <Button Grid.Column="3" Command="{Binding ClearAdvancedAuctionSearchCommand}"
+                          VerticalAlignment="Bottom" Padding="12,0" Content="Clear" />
+                  <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,6,0,0"
+                              Orientation="Horizontal" Spacing="7"
+                              IsHitTestVisible="False">
+                    <ProgressBar Width="74" Height="2" IsIndeterminate="True"
+                                 IsVisible="{Binding IsAuctionMetadataLoading}" />
+                    <TextBlock Text="{Binding AuctionMetadataStatus}" Classes="muted" FontSize="9"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                </Grid>
+              </Grid>
+            </Border>
+            <Grid x:Name="AuctionWorkspace" Grid.Row="1" SizeChanged="AuctionWorkspaceSizeChanged">
+            <Border Classes="card workspace" ClipToBounds="True">
+              <Grid RowDefinitions="38,*,Auto">
+                <Border Background="#202020" BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1" Padding="16,0">
+                  <Grid ColumnDefinitions="2.1*,1.05*,.65*,1.05*,1.05*,.8*,.75*">
+                    <Button Classes="sort-header" Command="{Binding SortAuctionItemCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="ITEM" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionItemSortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1" Classes="sort-header" Command="{Binding SortAuctionMinBuyoutCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="MIN BUYOUT" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionMinBuyoutSortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Classes="sort-header" Command="{Binding SortAuctionCountCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="AUCTIONS" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionCountSortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="3" Classes="sort-header" Command="{Binding SortAuctionRecentCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="RECENT VALUE" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionRecentSortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="4" Classes="sort-header" Command="{Binding SortAuctionHistoricalCommand}">
+                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <TextBlock Text="HISTORICAL" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionHistoricalSortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="5" Classes="sort-header" Command="{Binding SortAuctionSoldPerDayCommand}"
+                            ToolTip.Tip="Estimated items sold per day across the selected region">
+                      <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <TextBlock Text="SOLD/DAY" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionSoldPerDaySortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                    <Button Grid.Column="6" Classes="sort-header" Command="{Binding SortAuctionSaleRateCommand}"
+                            ToolTip.Tip="Regional percentage of posted auctions which sell">
+                      <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <TextBlock Text="SALE RATE" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionSaleRateSortIndicator}" Classes="sort-arrow" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+                </Border>
+                <ListBox x:Name="AuctionList" Grid.Row="1" Classes="auction-list" ItemsSource="{Binding AuctionResults}"
+                         SelectedItem="{Binding SelectedAuctionItem}">
+                  <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <VirtualizingStackPanel />
+                    </ItemsPanelTemplate>
+                  </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                      <DataTemplate>
+                        <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="16,11"
+                                Tag="{Binding}" AttachedToVisualTree="AuctionRowAttached"
+                                DetachedFromVisualTree="AuctionRowDetached"
+                                PointerEntered="AuctionRowPointerEntered" PointerExited="AuctionRowPointerExited">
+                          <Grid ColumnDefinitions="2.1*,1.05*,.65*,1.05*,1.05*,.8*,.75*">
+                            <Grid ColumnDefinitions="28,36,*" ColumnSpacing="7">
+                              <Button Classes="icon" Width="28" Height="28" MinHeight="28" Padding="0"
+                                      VerticalAlignment="Center" Click="ToggleAuctionFavorite"
+                                      ToolTip.Tip="{Binding FavoriteToolTip}">
+                                <lucide:LucideIcon Kind="Star" Size="15" StrokeWidth="1.9"
+                                                   Foreground="{Binding FavoriteColor}" />
+                              </Button>
+                              <Border Grid.Column="1" Width="36" Height="36" CornerRadius="6"
+                                      Background="{Binding QualityColor}" Padding="2">
+                                <Border Width="32" Height="32" CornerRadius="4" Background="#111111"
+                                        ClipToBounds="True">
+                                  <Image Width="32" Height="32" Source="{Binding Icon}" Stretch="UniformToFill">
+                                    <Image.Clip>
+                                      <RectangleGeometry Rect="0,0,32,32" RadiusX="4" RadiusY="4" />
+                                    </Image.Clip>
+                                  </Image>
+                                </Border>
+                              </Border>
+                              <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ItemName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding ItemString}" Classes="muted" FontSize="9" />
+                              </StackPanel>
+                            </Grid>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" FontWeight="SemiBold">
+                              <Run Text="{Binding MinBuyoutParts.Empty}" Foreground="#737A81" />
+                              <Run Text="{Binding MinBuyoutParts.Gold}" Foreground="#FFD100" />
+                              <Run Text="{Binding MinBuyoutParts.Silver}" Foreground="#C7CED6" />
+                              <Run Text="{Binding MinBuyoutParts.Copper}" Foreground="#C77C43" />
+                            </TextBlock>
+                            <TextBlock Grid.Column="2" Text="{Binding AuctionsDisplay}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="3" VerticalAlignment="Center">
+                              <Run Text="{Binding MarketValueParts.Empty}" Foreground="#737A81" />
+                              <Run Text="{Binding MarketValueParts.Gold}" Foreground="#FFD100" />
+                              <Run Text="{Binding MarketValueParts.Silver}" Foreground="#C7CED6" />
+                              <Run Text="{Binding MarketValueParts.Copper}" Foreground="#C77C43" />
+                            </TextBlock>
+                            <TextBlock Grid.Column="4" VerticalAlignment="Center">
+                              <Run Text="{Binding HistoricalParts.Empty}" Foreground="#737A81" />
+                              <Run Text="{Binding HistoricalParts.Gold}" Foreground="#FFD100" />
+                              <Run Text="{Binding HistoricalParts.Silver}" Foreground="#C7CED6" />
+                              <Run Text="{Binding HistoricalParts.Copper}" Foreground="#C77C43" />
+                            </TextBlock>
+                            <TextBlock Grid.Column="5" Text="{Binding RegionSoldPerDayDisplay}"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="6" Text="{Binding RegionSaleRateDisplay}"
+                                       VerticalAlignment="Center" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <Border Grid.Row="2" Background="#191919" BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,1,0,0" Padding="16,9">
+                  <TextBlock Text="{Binding AuctionResultSummary}" Classes="muted" FontSize="9" />
+                </Border>
+              </Grid>
+            </Border>
+            <Border x:Name="AuctionItemDrawer" Width="390" HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,12,30,0"
+                    Background="#121212" BorderBrush="#414141" BorderThickness="1" CornerRadius="4"
+                    BoxShadow="0 10 30 0 #90000000" ZIndex="20"
+                    IsVisible="{Binding IsAuctionItemDrawerOpen}">
+              <Grid RowDefinitions="Auto,Auto">
+                <Border x:Name="AuctionItemDrawerHeader" Background="#191919" BorderBrush="#353535" BorderThickness="0,0,0,1"
+                        SizeChanged="AuctionItemDrawerHeaderSizeChanged"
+                        Padding="14,12" CornerRadius="4,4,0,0">
+                  <Grid ColumnDefinitions="52,*,Auto,Auto" ColumnSpacing="8">
+                    <Border Width="48" Height="48" CornerRadius="7"
+                            Background="{Binding AuctionItemDrawerItem.QualityColor}" Padding="2">
+                      <Border Width="44" Height="44" CornerRadius="5" Background="#0D0D0D" ClipToBounds="True">
+                        <Image Width="44" Height="44" Source="{Binding AuctionItemDrawerItem.Icon}"
+                               Stretch="UniformToFill">
+                          <Image.Clip>
+                            <RectangleGeometry Rect="0,0,44,44" RadiusX="5" RadiusY="5" />
+                          </Image.Clip>
+                        </Image>
+                      </Border>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.ItemName}"
+                                 Foreground="{Binding AuctionItemDrawerItem.QualityColor}"
+                                 FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.ItemString}" Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="icon" Width="30" Height="30" MinHeight="30"
+                            Tag="{Binding AuctionItemDrawerItem}" Click="ToggleAuctionFavorite"
+                            ToolTip.Tip="{Binding AuctionItemDrawerItem.FavoriteToolTip}">
+                      <lucide:LucideIcon Kind="Star" Size="16" StrokeWidth="1.9"
+                                         Foreground="{Binding AuctionItemDrawerItem.FavoriteColor}" />
+                    </Button>
+                    <Button Grid.Column="3" Classes="icon" Width="30" Height="30" MinHeight="30"
+                            Command="{Binding CloseAuctionItemDrawerCommand}" ToolTip.Tip="Close item details">
+                      <lucide:LucideIcon Kind="X" Size="16" StrokeWidth="1.8" />
+                    </Button>
+                  </Grid>
+                </Border>
+                <ScrollViewer x:Name="AuctionItemDrawerBody" Grid.Row="1" Padding="16,14">
+                  <StackPanel Spacing="16">
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="ITEM DETAILS" Classes="field-label" />
+                      <ItemsControl ItemsSource="{Binding AuctionItemDrawerItem.ItemDetails}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7" Margin="0,1">
+                              <Grid Width="14" Height="14" VerticalAlignment="Center"
+                                    IsVisible="{Binding HasSocket}">
+                                <Ellipse Fill="#111111" Stroke="{Binding SocketColor}" StrokeThickness="2" />
+                                <Ellipse Width="6" Height="6" Fill="{Binding SocketColor}"
+                                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              </Grid>
+                              <TextBlock Grid.Column="1" Text="{Binding Text}" Foreground="{Binding Color}"
+                                         TextWrapping="Wrap" FontSize="11" LineHeight="17"
+                                         IsVisible="{Binding IsText}" />
+                              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                          IsVisible="{Binding IsMoney}">
+                                <TextBlock Text="{Binding Text}" Foreground="#E4E4E4" FontSize="11" />
+                                <TextBlock FontSize="11">
+                                  <Run Text="{Binding Money.Gold}" Foreground="#FFD100" />
+                                  <Run Text="{Binding Money.Silver}" Foreground="#C7CED6" />
+                                  <Run Text="{Binding Money.Copper}" Foreground="#C77C43" />
+                                </TextBlock>
+                              </StackPanel>
+                            </Grid>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <Button Command="{Binding OpenAuctionItemInWowheadCommand}"
+                              HorizontalAlignment="Left" Margin="0,3,0,0">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                          <Image Source="/Assets/wowhead-logo.png" Width="18" Height="18" />
+                          <TextBlock Text="Open in Wowhead" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                    <Border Height="1" Background="#353535" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                      <StackPanel Spacing="5">
+                        <TextBlock Text="MIN BUYOUT" Classes="field-label" />
+                        <TextBlock FontWeight="SemiBold">
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Empty}" Foreground="#737A81" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Gold}" Foreground="#FFD100" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Silver}" Foreground="#C7CED6" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Copper}" Foreground="#C77C43" />
+                        </TextBlock>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="5">
+                        <TextBlock Text="RECENT" Classes="field-label" />
+                        <TextBlock>
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Empty}" Foreground="#737A81" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Gold}" Foreground="#FFD100" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Silver}" Foreground="#C7CED6" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Copper}" Foreground="#C77C43" />
+                        </TextBlock>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Spacing="5">
+                        <TextBlock Text="AUCTIONS" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionItemDrawerItem.AuctionsDisplay}" />
+                      </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="#353535" />
+                    <StackPanel Spacing="8">
+                      <TextBlock Text="REGIONAL MARKET ACTIVITY" Classes="field-label" />
+                      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                        <StackPanel Spacing="5">
+                          <TextBlock Text="SOLD / DAY" Classes="field-label" FontSize="9" />
+                          <TextBlock Text="{Binding AuctionItemDrawerItem.RegionSoldPerDayDisplay}"
+                                     FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="5">
+                          <TextBlock Text="SALE RATE" Classes="field-label" FontSize="9" />
+                          <TextBlock Text="{Binding AuctionItemDrawerItem.RegionSaleRateDisplay}"
+                                     FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="5">
+                          <TextBlock Text="SALE AVG" Classes="field-label" FontSize="9" />
+                          <TextBlock FontSize="11">
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Empty}" Foreground="#737A81" />
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Gold}" Foreground="#FFD100" />
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Silver}" Foreground="#C7CED6" />
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Copper}" Foreground="#C77C43" />
+                          </TextBlock>
+                        </StackPanel>
+                      </Grid>
+                    </StackPanel>
+                    <Border Height="1" Background="#353535" />
+                    <StackPanel Spacing="9">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Text="PRICE HISTORY" Classes="field-label" />
+                        <TextBlock Grid.Column="1" Text="{Binding AuctionItemDrawerItem.PriceHistoryRange}"
+                                   Classes="muted" FontSize="9" />
+                      </Grid>
+                      <Border Height="76" Background="#0E0E0E" BorderBrush="#303030" BorderThickness="1"
+                              CornerRadius="3" Padding="7" IsVisible="{Binding AuctionItemDrawerItem.HasPriceChart}">
+                        <controls:PriceHistoryChart Points="{Binding AuctionItemDrawerItem.PriceHistory}" />
+                      </Border>
+                      <Grid ColumnDefinitions="*,*" ColumnSpacing="12"
+                            IsVisible="{Binding AuctionItemDrawerItem.HasPriceChart}">
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="LOW" Classes="field-label" FontSize="9" />
+                          <TextBlock FontSize="11">
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Empty}" Foreground="#737A81" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Gold}" Foreground="#FFD100" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Silver}" Foreground="#C7CED6" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Copper}" Foreground="#C77C43" />
+                          </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="3">
+                          <TextBlock Text="HIGH" Classes="field-label" FontSize="9" />
+                          <TextBlock FontSize="11">
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Empty}" Foreground="#737A81" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Gold}" Foreground="#FFD100" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Silver}" Foreground="#C7CED6" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Copper}" Foreground="#C77C43" />
+                          </TextBlock>
+                        </StackPanel>
+                      </Grid>
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.PriceHistoryStatus}"
+                                 Classes="muted" FontSize="9" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border Height="1" Background="#353535" />
+                    <StackPanel Spacing="9" Margin="0,0,0,14">
+                      <TextBlock Text="LOCAL AUCTIONDB PRICE SNAPSHOTS" Classes="field-label" />
+                      <ItemsControl ItemsSource="{Binding AuctionItemDrawerItem.PriceSnapshots}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="0,9,0,11">
+                              <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Faction}" Foreground="{Binding FactionColor}"
+                                           FontSize="11" FontWeight="SemiBold" />
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
+                                      ColumnSpacing="12" RowSpacing="8">
+                                  <StackPanel Spacing="3">
+                                    <TextBlock Text="MIN BUYOUT" Classes="field-label" FontSize="9" />
+                                    <TextBlock FontSize="11" FontWeight="SemiBold">
+                                      <Run Text="{Binding MinBuyout.Empty}" Foreground="#737A81" />
+                                      <Run Text="{Binding MinBuyout.Gold}" Foreground="#FFD100" />
+                                      <Run Text="{Binding MinBuyout.Silver}" Foreground="#C7CED6" />
+                                      <Run Text="{Binding MinBuyout.Copper}" Foreground="#C77C43" />
+                                    </TextBlock>
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="RECENT" Classes="field-label" FontSize="9" />
+                                    <TextBlock FontSize="11">
+                                      <Run Text="{Binding Recent.Empty}" Foreground="#737A81" />
+                                      <Run Text="{Binding Recent.Gold}" Foreground="#FFD100" />
+                                      <Run Text="{Binding Recent.Silver}" Foreground="#C7CED6" />
+                                      <Run Text="{Binding Recent.Copper}" Foreground="#C77C43" />
+                                    </TextBlock>
+                                  </StackPanel>
+                                  <StackPanel Grid.Row="1" Spacing="3">
+                                    <TextBlock Text="HISTORICAL" Classes="field-label" FontSize="9" />
+                                    <TextBlock FontSize="11">
+                                      <Run Text="{Binding Historical.Empty}" Foreground="#737A81" />
+                                      <Run Text="{Binding Historical.Gold}" Foreground="#FFD100" />
+                                      <Run Text="{Binding Historical.Silver}" Foreground="#C7CED6" />
+                                      <Run Text="{Binding Historical.Copper}" Foreground="#C77C43" />
+                                    </TextBlock>
+                                  </StackPanel>
+                                  <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="AUCTIONS" Classes="field-label" FontSize="9" />
+                                    <TextBlock Text="{Binding AuctionsDisplay}" FontSize="11" />
+                                  </StackPanel>
+                                </Grid>
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.AdditionalSnapshotsText}"
+                                 Classes="muted" FontSize="10"
+                                 IsVisible="{Binding AuctionItemDrawerItem.AdditionalSnapshotsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </StackPanel>
+                </ScrollViewer>
+              </Grid>
+            </Border>
+            </Grid>
+          </Grid>
+
+          <Grid IsVisible="{Binding IsAddonVersionsSelected}">
+            <Border Classes="card workspace" ClipToBounds="True">
+              <Grid RowDefinitions="Auto,38,*">
+                <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1" Padding="16,10">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <TextBlock Text="{Binding AddonManagementStatus}" Classes="muted" FontSize="10"
+                               TextWrapping="Wrap" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Command="{Binding CheckAddonUpdatesCommand}"
+                            HorizontalContentAlignment="Center">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <lucide:LucideIcon Kind="RefreshCw" Size="14" StrokeWidth="1.8"
+                                           VerticalAlignment="Center" />
+                        <TextBlock Text="Check for updates" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+                </Border>
+                <Border Grid.Row="1" Background="#202020" BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1" Padding="16,0">
+                  <Grid ColumnDefinitions="2*,.7*,.8*,Auto">
+                    <TextBlock Text="ADDON / CLIENT" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="VERSION" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="STATUS" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="ACTIONS" Classes="field-label" VerticalAlignment="Center"
+                               Margin="14,0,0,0" />
+                  </Grid>
+                </Border>
+                <ScrollViewer Grid.Row="2">
+                  <ItemsControl ItemsSource="{Binding AddonStatuses}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="16,12">
+                          <Grid ColumnDefinitions="2*,.7*,.8*,Auto">
+                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                              <TextBlock Text="{Binding ClientName}" Classes="muted" FontSize="9" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding Version}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{Binding StatusColor}"
+                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="7"
+                                        IsVisible="{Binding CanManage}">
+                              <Button Classes="ghost" Content="Reinstall" Click="ReinstallAddonClick"
+                                      ToolTip.Tip="Download and replace this addon with the current channel version" />
+                              <Button Classes="danger" Content="Remove" Click="RemoveAddonClick"
+                                      ToolTip.Tip="Remove this addon from the selected WoW client" />
+                            </StackPanel>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </Grid>
+            </Border>
+          </Grid>
+
+          <Grid IsVisible="{Binding IsAccountingSelected}">
+            <Grid ColumnDefinitions="3*,2*" ColumnSpacing="0">
+              <Border Classes="card workspace" BorderThickness="0,0,1,0" Padding="20">
+                <StackPanel Spacing="16">
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
+                    <StackPanel Spacing="7">
+                      <TextBlock Text="ACCOUNT" Classes="field-label" />
+                      <ComboBox PlaceholderText="Choose an account" ItemsSource="{Binding AccountingAccounts}"
+                                SelectedItem="{Binding SelectedAccount}">
+                        <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+                      </ComboBox>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="7">
+                      <TextBlock Text="REALM" Classes="field-label" />
+                      <ComboBox PlaceholderText="Choose a realm" ItemsSource="{Binding AccountingRealms}"
+                                SelectedItem="{Binding SelectedRealm}" />
+                    </StackPanel>
+                  </Grid>
+                  <Border Height="1" Background="{StaticResource BorderBrush}" />
+                  <StackPanel Spacing="10">
+                    <TextBlock Text="DATA TO INCLUDE" Classes="field-label" />
+                    <WrapPanel>
+                      <CheckBox Content="Sales" Margin="0,0,20,10" IsChecked="{Binding ExportSales}" />
+                      <CheckBox Content="Purchases" Margin="0,0,20,10" IsChecked="{Binding ExportPurchases}" />
+                      <CheckBox Content="Income" Margin="0,0,20,10" IsChecked="{Binding ExportIncome}" />
+                      <CheckBox Content="Expenses" Margin="0,0,20,10" IsChecked="{Binding ExportExpenses}" />
+                      <CheckBox Content="Expired auctions" Margin="0,0,20,10" IsChecked="{Binding ExportExpired}" />
+                      <CheckBox Content="Canceled auctions" Margin="0,0,20,10" IsChecked="{Binding ExportCanceled}" />
+                    </WrapPanel>
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button Classes="primary" Content="Export CSV files" Command="{Binding ExportAccountingCommand}"
+                            IsEnabled="{Binding CanExportAccounting}" />
+                    <TextBlock Text="{Binding ExportStatus}" Classes="muted" FontSize="10"
+                               TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="420" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="16">
+                <Border Classes="card workspace" Padding="20">
+                  <StackPanel Spacing="10">
+                    <TextBlock Text="Export location" FontSize="13" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding ExportDirectory}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+                <Border Classes="subtle-card" Padding="18">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Safe local parsing" Foreground="#69C58F" FontWeight="SemiBold" FontSize="11" />
+                    <TextBlock Text="SavedVariables are parsed as data without executing Lua. Item names are resolved locally and CSV fields are safely escaped."
+                               Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Grid>
+
+        <Grid Grid.Row="1" IsVisible="{Binding IsSettingsOpen}">
+          <Border Classes="card workspace" ClipToBounds="True">
+            <TabControl Background="Transparent" Padding="0">
+              <TabItem Header="General" Classes="settings-tab">
+                <ScrollViewer Padding="20">
+                  <StackPanel Spacing="18">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="World of Warcraft" Classes="section-title" />
+                      <TextBlock Text="Choose the base folder containing your WoW clients." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Installation directory" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                      <Grid Grid.Column="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                        <TextBox Text="{Binding Settings.WowPath}" PlaceholderText="No directory selected" />
+                        <Button Grid.Column="1" Content="Browse…" Click="BrowseWowDirectory" />
+                        <Button Grid.Column="2" Content="Find automatically" Command="{Binding FindWowCommand}" />
+                      </Grid>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" />
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Realm management" Classes="section-title" />
+                      <TextBlock Text="Add another realm from your connected TSM account." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Add realm" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                      <StackPanel Grid.Column="1" Spacing="7">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsLoggedIn}">
+                          <ComboBox ItemsSource="{Binding AvailableRealms}" SelectedItem="{Binding SelectedAvailableRealm}"
+                                    PlaceholderText="No additional realms available">
+                            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+                          </ComboBox>
+                          <Button Grid.Column="1" Classes="primary" Content="Add realm" Command="{Binding AddRealmCommand}" />
+                        </Grid>
+                        <TextBlock Text="{Binding RealmManagementStatus}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                      </StackPanel>
+                    </Grid>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Release channel" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                      <ComboBox Grid.Column="1" Width="240" HorizontalAlignment="Left" ItemsSource="{Binding ReleaseChannels}"
+                                SelectedItem="{Binding Settings.ReleaseChannel}" />
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" />
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Desktop behavior" Classes="section-title" />
+                      <TextBlock Text="Control how the application starts, minimizes, and exits." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Window options" FontWeight="SemiBold" FontSize="11" />
+                      <StackPanel Grid.Column="1" Spacing="11">
+                        <CheckBox Content="Run at startup" IsChecked="{Binding Settings.RunAtStartup}" />
+                        <CheckBox Content="Start minimized" IsChecked="{Binding Settings.StartMinimized}" />
+                        <CheckBox Content="Minimize to system tray" IsChecked="{Binding Settings.MinimizeToTray}" />
+                        <CheckBox Content="Confirm before exiting" IsChecked="{Binding Settings.ConfirmExit}" />
+                      </StackPanel>
+                    </Grid>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+
+              <TabItem Header="Notifications" Classes="settings-tab">
+                <ScrollViewer Padding="20">
+                  <StackPanel Spacing="18">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Desktop notifications" Classes="section-title" />
+                      <TextBlock Text="Choose which events are allowed to notify you." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Border Classes="subtle-card" Padding="18">
+                      <StackPanel Spacing="13">
+                        <CheckBox Content="New realm data downloaded" IsChecked="{Binding Settings.RealmDataNotification}" />
+                        <CheckBox Content="Addon updates installed" IsChecked="{Binding Settings.AddonNotification}" />
+                        <CheckBox Content="Desktop app update available" IsChecked="{Binding Settings.AppUpdateNotification}" />
+                        <CheckBox Content="Updated app news" IsChecked="{Binding Settings.NewsNotification}" />
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+
+              <TabItem Header="Updates" Classes="settings-tab">
+                <ScrollViewer Padding="20">
+                  <StackPanel Spacing="18">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Application updates" Classes="section-title" />
+                      <TextBlock Text="Updates come directly from Wuild/TSM-App releases on GitHub." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Border Classes="subtle-card" Padding="18">
+                      <StackPanel Spacing="14">
+                        <CheckBox Content="Automatically check for updates" IsChecked="{Binding Settings.AutomaticUpdateChecks}" />
+                        <CheckBox Content="Automatically install updates and restart"
+                                  IsChecked="{Binding Settings.AutomaticallyInstallUpdates}"
+                                  IsEnabled="{Binding CanAutomaticallyInstallUpdates}" />
+                        <StackPanel Orientation="Horizontal" Spacing="9">
+                          <TextBlock Text="Check every" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+                          <ComboBox Width="90" ItemsSource="{Binding UpdateCheckIntervals}"
+                                    SelectedItem="{Binding Settings.UpdateCheckIntervalHours}" />
+                          <TextBlock Text="hours" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Installed version" FontWeight="SemiBold" FontSize="11" />
+                      <TextBlock Grid.Column="1" Text="{Binding InstalledAppVersion}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Update status" FontWeight="SemiBold" FontSize="11" />
+                      <StackPanel Grid.Column="1" Spacing="10">
+                        <TextBlock Text="{Binding UpdateStatus}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Button Content="Check now" Command="{Binding CheckForUpdatesCommand}" />
+                          <Button Classes="primary" Content="{Binding UpdateInstallAction}" Command="{Binding InstallUpdateCommand}"
+                                  IsVisible="{Binding HasAvailableAppUpdate}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Grid>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+
+              <TabItem Header="Advanced" Classes="settings-tab">
+                <ScrollViewer Padding="20">
+                  <StackPanel Spacing="18">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Account sync" Classes="section-title" />
+                      <TextBlock Text="Compatibility and account security options." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <CheckBox Content="Load and cache Wowhead item details and artwork"
+                              IsChecked="{Binding LoadOnlineItemIcons}" />
+                    <Border Background="#211C15" BorderBrush="#624921" BorderThickness="1" CornerRadius="3" Padding="14,12">
+                      <TextBlock Foreground="#F4CF87" FontSize="10" TextWrapping="Wrap"
+                                 Text="The legacy session exchange and signed sync requests use plain HTTP. The password request uses HTTPS. Enable this only on a trusted network." />
+                    </Border>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <Button Content="Upload app log" IsEnabled="False" />
+                      <Button Content="Log out" Command="{Binding LogoutCommand}" />
+                    </StackPanel>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                      <StackPanel Spacing="4">
+                        <TextBlock Text="Reset application" Classes="section-title" />
+                        <TextBlock Text="Clear local caches and restore every app setting to its default. WoW files are never removed."
+                                   Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="danger" Content="Reset app…"
+                              VerticalAlignment="Center" Click="ResetApplicationClick" />
+                    </Grid>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+
+              <TabItem Header="Help" Classes="settings-tab">
+                <ScrollViewer Padding="20">
+                  <StackPanel Spacing="20">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Help and troubleshooting" Classes="section-title" />
+                      <TextBlock Text="Quick guidance for the most common setup and data problems."
+                                 Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="26" RowDefinitions="Auto,Auto" RowSpacing="24">
+                      <StackPanel Spacing="8">
+                        <TextBlock Text="Getting started" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="Choose the World of Warcraft folder containing client folders such as _retail_ or _anniversary_. TradeSkillMaster and AppHelper must already be installed in each client you want to use."
+                                   Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="8">
+                        <TextBlock Text="Realm data is missing" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="Confirm AppHelper is installed, sign in, then use Refresh or Sync now. The top-bar indicator turns green after a successful recent sync."
+                                   Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
+                      </StackPanel>
+                      <StackPanel Grid.Row="1" Spacing="8">
+                        <TextBlock Text="Auction House results" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="Prices come from local AppHelper AuctionDB snapshots. Wowhead only supplies optional names, icons, categories, and item details. Favorite an item to begin collecting price history from future syncs."
+                                   Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
+                      </StackPanel>
+                      <StackPanel Grid.Row="1" Grid.Column="1" Spacing="8">
+                        <TextBlock Text="Start over safely" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="Reset app under Advanced clears app settings, cached icons, price history, favorites, and the remembered login. It never removes WoW addons or SavedVariables."
+                                   Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
+                      </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" />
+                    <StackPanel Spacing="10">
+                      <TextBlock Text="Useful links" Classes="section-title" />
+                      <WrapPanel>
+                        <Button Classes="ghost" Content="User guide" Margin="0,0,8,8"
+                                Tag="https://github.com/Wuild/TSM-App#readme" Click="OpenExternalLink" />
+                        <Button Classes="ghost" Content="Latest release" Margin="0,0,8,8"
+                                Tag="https://github.com/Wuild/TSM-App/releases/latest" Click="OpenExternalLink" />
+                        <Button Classes="ghost" Content="Report a problem" Margin="0,0,8,8"
+                                Tag="https://github.com/Wuild/TSM-App/issues" Click="OpenExternalLink" />
+                        <Button Classes="ghost" Content="TradeSkillMaster" Margin="0,0,8,8"
+                                Tag="https://www.tradeskillmaster.com/" Click="OpenExternalLink" />
+                      </WrapPanel>
+                    </StackPanel>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+
+              <TabItem Header="Licenses" Classes="settings-tab">
+                <ScrollViewer Padding="20">
+                  <StackPanel Spacing="16">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Open-source licenses" Classes="section-title" />
+                      <TextBlock Text="Direct and transitive packages are grouped by their upstream project. Platform-specific native asset packages use the same upstream license."
+                                 Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding ThirdPartyLicenses}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="0,11">
+                            <Grid ColumnDefinitions="2*,Auto" ColumnSpacing="16">
+                              <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="7">
+                                  <TextBlock Text="{Binding Project}" FontSize="11" FontWeight="SemiBold" />
+                                  <TextBlock Text="{Binding Version}" Classes="muted" FontSize="9"
+                                             VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Purpose}" Classes="muted" FontSize="10"
+                                           TextWrapping="Wrap" />
+                              </StackPanel>
+                              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
+                                          VerticalAlignment="Center">
+                                <Button Classes="ghost" Content="Project" Tag="{Binding ProjectUrl}"
+                                        Click="OpenExternalLink" />
+                                <Button Classes="ghost" Content="{Binding License}" Tag="{Binding LicenseUrl}"
+                                        Click="OpenExternalLink" />
+                              </StackPanel>
+                            </Grid>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Border Background="#211C15" BorderBrush="#624921" BorderThickness="1"
+                            CornerRadius="3" Padding="14,12">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <TextBlock Text="TSM Desktop is an independent, unofficial personal project. It is not affiliated with, endorsed by, or supported by TradeSkillMaster, Blizzard, or Wowhead. Third-party names, artwork, data, trademarks, and copyrights belong to their respective owners."
+                                   Foreground="#F4CF87" FontSize="10" TextWrapping="Wrap" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"
+                                    VerticalAlignment="Center">
+                          <Button Content="Project notice" Click="OpenProjectNoticeClick" />
+                          <Button Content="Third-party notices" Click="OpenThirdPartyNoticesClick" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </StackPanel>
+                </ScrollViewer>
+              </TabItem>
+            </TabControl>
+          </Border>
+        </Grid>
+      </Grid>
+    </Grid>
+
+    <Grid IsVisible="{Binding IsLoginVisible}" ColumnDefinitions="4*,5*">
+      <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+        <Grid Margin="48">
+          <StackPanel VerticalAlignment="Center" MaxWidth="320" Spacing="16">
+            <Image Width="48" Height="48" Source="/Assets/tsm-app.png" HorizontalAlignment="Left" />
+            <StackPanel Spacing="5">
+              <TextBlock Text="TSM Desktop" FontSize="24" FontWeight="SemiBold" Foreground="#EEEEEE" />
+              <TextBlock Text="Realm data, addon updates, and local accounting tools."
+                         Foreground="#A0A0A0" FontSize="12" TextWrapping="Wrap" LineHeight="18" />
+            </StackPanel>
+          </StackPanel>
+        </Grid>
+      </Border>
+      <Grid Grid.Column="1">
+        <Border Width="380" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <StackPanel Spacing="16">
+            <StackPanel Spacing="4" Margin="0,0,0,4">
+              <TextBlock Text="Sign in" FontSize="20" FontWeight="SemiBold" Foreground="#EEEEEE" />
+              <TextBlock Text="Connect your TradeSkillMaster account" Classes="muted" FontSize="11" />
+            </StackPanel>
+            <StackPanel Spacing="7">
+              <TextBlock Text="Email address" FontSize="11" />
+              <TextBox Text="{Binding Settings.Email}" PlaceholderText="name@example.com" />
+            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="7">
+              <TextBlock Text="Password" FontSize="11" VerticalAlignment="Center" />
+              <Button Grid.Column="1" Classes="text-link" Content="Forgot password?"
+                      Tag="https://id.tradeskillmaster.com/realms/app/login-actions/reset-credentials?client_id=app-auth"
+                      Click="OpenExternalLink" />
+              <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding Password}"
+                       PasswordChar="●" PlaceholderText="Password" />
+            </Grid>
+            <CheckBox Content="Remember this account securely" IsChecked="{Binding Settings.RememberLogin}" />
+            <TextBlock Text="{Binding LoginStatus}" Classes="muted" FontSize="10" TextWrapping="Wrap"
+                       IsVisible="{Binding LoginStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock Text="{Binding LoginError}" Foreground="{StaticResource DangerBrush}" FontSize="10" TextWrapping="Wrap"
+                       IsVisible="{Binding LoginError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <Button Classes="primary" Command="{Binding LoginCommand}" Content="Sign in"
+                    HorizontalContentAlignment="Center" />
+            <TextBlock Text="Credentials are stored in your operating system's protected credential store."
+                       Classes="muted" FontSize="9" TextAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <Grid IsVisible="{Binding IsStartupLoadingVisible}" Background="{StaticResource AppBackgroundBrush}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="14">
+        <Image Width="44" Height="44" Source="/Assets/tsm-app.png" HorizontalAlignment="Center" />
+        <TextBlock Text="Opening TSM…" Classes="muted" FontSize="11" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+
+    <Grid IsVisible="{Binding IsOnboardingVisible}" ColumnDefinitions="320,*"
+          Background="{StaticResource AppBackgroundBrush}">
+      <Border Background="#181818" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+        <Grid Margin="44,42" RowDefinitions="Auto,*,Auto">
+          <StackPanel Spacing="18">
+            <Image Width="46" Height="46" Source="/Assets/tsm-app.png" HorizontalAlignment="Left" />
+            <StackPanel Spacing="5">
+              <TextBlock Text="Set up TSM Desktop" FontSize="22" FontWeight="SemiBold" Foreground="#EEEEEE" />
+              <TextBlock Text="A couple of details, then you're ready to go."
+                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="24">
+            <Grid ColumnDefinitions="28,*" ColumnSpacing="12">
+              <Border Width="26" Height="26" CornerRadius="13" Background="#F5A623"
+                      IsVisible="{Binding IsOnboardingLocationStep}">
+                <TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="#17120B" FontWeight="Bold" FontSize="11" />
+              </Border>
+              <Border Width="26" Height="26" CornerRadius="13" Background="#2B2B2B"
+                      BorderBrush="#494949" BorderThickness="1"
+                      IsVisible="{Binding IsOnboardingPreferencesStep}">
+                <TextBlock Text="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="#C4C4C4" FontWeight="SemiBold" FontSize="11" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="World of Warcraft" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="Find your installation" Classes="muted" FontSize="10" />
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="28,*" ColumnSpacing="12">
+              <Border Width="26" Height="26" CornerRadius="13" Background="#2B2B2B"
+                      BorderBrush="#494949" BorderThickness="1"
+                      IsVisible="{Binding IsOnboardingLocationStep}">
+                <TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="#C4C4C4" FontWeight="SemiBold" FontSize="11" />
+              </Border>
+              <Border Width="26" Height="26" CornerRadius="13" Background="#F5A623"
+                      IsVisible="{Binding IsOnboardingPreferencesStep}">
+                <TextBlock Text="2" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="#17120B" FontWeight="Bold" FontSize="11" />
+              </Border>
+              <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="Desktop preferences" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="Notifications and startup" Classes="muted" FontSize="10" />
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+
+          <TextBlock Grid.Row="2" Text="You can change these options later in Settings."
+                     Classes="muted" FontSize="9" TextWrapping="Wrap" />
+        </Grid>
+      </Border>
+
+      <Grid Grid.Column="1" Margin="72,54" RowDefinitions="*,Auto">
+        <Grid MaxWidth="620" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <StackPanel IsVisible="{Binding IsOnboardingLocationStep}" Spacing="22">
+            <StackPanel Spacing="7">
+              <TextBlock Text="Where is World of Warcraft installed?" FontSize="25"
+                         FontWeight="SemiBold" Foreground="#EEEEEE" />
+              <TextBlock Text="TSM uses the game folder to find your installed flavors, addon data, realms, and accounting files."
+                         Classes="muted" FontSize="12" TextWrapping="Wrap" LineHeight="19" />
+            </StackPanel>
+            <StackPanel Spacing="8">
+              <TextBlock Text="World of Warcraft folder" FontSize="11" FontWeight="SemiBold" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBox Text="{Binding Settings.WowPath}" PlaceholderText="Select the folder containing _retail_, _classic_, etc."
+                         VerticalContentAlignment="Center" />
+                <Button Grid.Column="1" Content="Browse…" Click="BrowseWowDirectory" />
+              </Grid>
+              <TextBlock Text="Choose the main World of Warcraft folder, not an individual game flavor folder."
+                         Classes="muted" FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding OnboardingWowStatus}" Foreground="#DCA84B" FontSize="10"
+                         TextWrapping="Wrap"
+                         IsVisible="{Binding OnboardingWowStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+            <Button Content="Find automatically" Command="{Binding FindWowCommand}"
+                    HorizontalAlignment="Left" />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding IsOnboardingPreferencesStep}" Spacing="24">
+            <StackPanel Spacing="7">
+              <TextBlock Text="Make TSM work the way you do" FontSize="25"
+                         FontWeight="SemiBold" Foreground="#EEEEEE" />
+              <TextBlock Text="Choose how the desktop app behaves. Nothing here is permanent."
+                         Classes="muted" FontSize="12" TextWrapping="Wrap" LineHeight="19" />
+            </StackPanel>
+            <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="1" CornerRadius="3" Padding="20,18">
+              <StackPanel Spacing="17">
+                <CheckBox Content="Show desktop notifications" IsChecked="{Binding ShowNotifications}" />
+                <Border Height="1" Background="{StaticResource BorderBrush}" />
+                <CheckBox Content="Minimize to the system tray" IsChecked="{Binding Settings.MinimizeToTray}" />
+                <Border Height="1" Background="{StaticResource BorderBrush}" />
+                <CheckBox Content="Open TSM when I sign in" IsChecked="{Binding Settings.RunAtStartup}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" MaxWidth="620" Width="620" HorizontalAlignment="Center"
+              ColumnDefinitions="Auto,*,Auto" Margin="0,28,0,0">
+          <Button Content="Back" Command="{Binding OnboardingBackCommand}"
+                  IsVisible="{Binding CanGoBackInOnboarding}" />
+          <Button Grid.Column="2" Classes="primary" Content="{Binding OnboardingNextText}"
+                  Command="{Binding OnboardingNextCommand}" MinWidth="118" />
+        </Grid>
+      </Grid>
+    </Grid>
+  </Grid>
+</Window>

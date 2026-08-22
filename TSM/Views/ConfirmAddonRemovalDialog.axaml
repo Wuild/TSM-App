@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lucide="using:Lucide.Avalonia"
+        x:Class="TSM.Views.ConfirmAddonRemovalDialog"
+        Title="Remove addon"
+        Width="460" Height="210"
+        CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        WindowDecorationsTheme="{StaticResource TsmWindowDecorations}"
+        Background="{StaticResource AppBackgroundBrush}">
+  <Grid RowDefinitions="*,Auto" Margin="18">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+      <lucide:LucideIcon Kind="TriangleAlert" Size="25" StrokeWidth="1.7"
+                         Foreground="#F06464" VerticalAlignment="Top" />
+      <StackPanel Grid.Column="1" Spacing="7">
+        <TextBlock Text="Remove this addon?" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock x:Name="DescriptionText" Classes="muted" FontSize="10"
+                   TextWrapping="Wrap" LineHeight="16" />
+        <TextBlock Text="SavedVariables and other WoW account data will not be removed."
+                   Foreground="#F4CF87" FontSize="10" TextWrapping="Wrap" />
+      </StackPanel>
+    </Grid>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Classes="ghost" Content="Cancel" Click="CancelClick" />
+      <Button Classes="danger" Content="Remove addon" Click="RemoveClick" />
+    </StackPanel>
+  </Grid>
+</Window>

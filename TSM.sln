@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TSM", "TSM\TSM.csproj", "{8BB0A725-F06F-4D6C-852C-8F1E852CDA79}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TSM.Tests", "TSM.Tests\TSM.Tests.csproj", "{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8BB0A725-F06F-4D6C-852C-8F1E852CDA79}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8BB0A725-F06F-4D6C-852C-8F1E852CDA79}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8BB0A725-F06F-4D6C-852C-8F1E852CDA79}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8BB0A725-F06F-4D6C-852C-8F1E852CDA79}.Release|Any CPU.Build.0 = Release|Any CPU
+		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

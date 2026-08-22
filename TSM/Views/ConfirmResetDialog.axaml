@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lucide="using:Lucide.Avalonia"
+        x:Class="TSM.Views.ConfirmResetDialog"
+        Title="Reset TSM Desktop"
+        Width="460" Height="222"
+        CanResize="False" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        WindowDecorationsTheme="{StaticResource TsmWindowDecorations}"
+        Background="{StaticResource AppBackgroundBrush}">
+  <Grid RowDefinitions="*,Auto" Margin="18">
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">
+      <lucide:LucideIcon Kind="TriangleAlert" Size="25" StrokeWidth="1.7"
+                         Foreground="#F06464" VerticalAlignment="Top" />
+      <StackPanel Grid.Column="1" Spacing="7">
+        <TextBlock Text="Reset the application?" FontSize="15" FontWeight="SemiBold" />
+        <TextBlock Text="This restores every preference to its default and removes cached item data, price history, managed realms, favorites, and the remembered login."
+                   Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
+        <TextBlock Text="Your World of Warcraft installation, addons, and SavedVariables will not be changed."
+                   Foreground="#F4CF87" FontSize="10" TextWrapping="Wrap" />
+      </StackPanel>
+    </Grid>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Classes="ghost" Content="Cancel" Click="CancelClick" />
+      <Button Classes="danger" Content="Reset everything" Click="ResetClick" />
+    </StackPanel>
+  </Grid>
+</Window>
