@@ -183,21 +183,11 @@ public sealed partial class MainWindow : Window
         UpdateAuctionDrawerMaximumHeight(e.NewSize.Height);
     }
 
-    private void AuctionItemDrawerHeaderSizeChanged(object? sender, SizeChangedEventArgs e)
-    {
-        UpdateAuctionDrawerMaximumHeight(AuctionWorkspace.Bounds.Height);
-    }
-
     private void UpdateAuctionDrawerMaximumHeight(double workspaceHeight)
     {
         if (workspaceHeight <= 0)
             return;
-        var drawerMaximum = Math.Max(1, workspaceHeight - 24);
-        var headerHeight = AuctionItemDrawerHeader.Bounds.Height > 0
-            ? AuctionItemDrawerHeader.Bounds.Height
-            : 74;
-        AuctionItemDrawer.MaxHeight = drawerMaximum;
-        AuctionItemDrawerBody.MaxHeight = Math.Max(1, drawerMaximum - headerHeight - 2);
+        AuctionItemDrawer.MaxHeight = Math.Max(1, workspaceHeight - 24);
     }
 
     private async void DisposeViewModel(object? sender, EventArgs e)

@@ -468,11 +468,10 @@
             <Border x:Name="AuctionItemDrawer" Width="390" HorizontalAlignment="Right" VerticalAlignment="Top"
                     Margin="0,12,30,0"
                     Background="#121212" BorderBrush="#414141" BorderThickness="1" CornerRadius="4"
-                    BoxShadow="0 10 30 0 #90000000" ZIndex="20"
+                    BoxShadow="0 10 30 0 #90000000" ZIndex="20" ClipToBounds="True"
                     IsVisible="{Binding IsAuctionItemDrawerOpen}">
-              <Grid RowDefinitions="Auto,Auto">
-                <Border x:Name="AuctionItemDrawerHeader" Background="#191919" BorderBrush="#353535" BorderThickness="0,0,0,1"
-                        SizeChanged="AuctionItemDrawerHeaderSizeChanged"
+              <Grid RowDefinitions="Auto,*">
+                <Border Background="#191919" BorderBrush="#353535" BorderThickness="0,0,0,1"
                         Padding="14,12" CornerRadius="4,4,0,0">
                   <Grid ColumnDefinitions="52,*,Auto,Auto" ColumnSpacing="8">
                     <Border Width="48" Height="48" CornerRadius="7"
@@ -504,8 +503,9 @@
                     </Button>
                   </Grid>
                 </Border>
-                <ScrollViewer x:Name="AuctionItemDrawerBody" Grid.Row="1" Padding="16,14">
-                  <StackPanel Spacing="16">
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="16" Margin="16,14,16,18">
                     <StackPanel Spacing="7">
                       <TextBlock Text="ITEM DETAILS" Classes="field-label" />
                       <ItemsControl ItemsSource="{Binding AuctionItemDrawerItem.ItemDetails}">
@@ -628,7 +628,7 @@
                                  Classes="muted" FontSize="9" TextWrapping="Wrap" />
                     </StackPanel>
                     <Border Height="1" Background="#353535" />
-                    <StackPanel Spacing="9" Margin="0,0,0,14">
+                    <StackPanel Spacing="9">
                       <TextBlock Text="LOCAL AUCTIONDB PRICE SNAPSHOTS" Classes="field-label" />
                       <ItemsControl ItemsSource="{Binding AuctionItemDrawerItem.PriceSnapshots}">
                         <ItemsControl.ItemTemplate>
