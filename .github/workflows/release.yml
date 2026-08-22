@@ -80,15 +80,22 @@ jobs:
           if (-not (Test-Path -LiteralPath $iscc)) {
             throw "Inno Setup compiler was not found."
           }
-          $projectRoot = (Resolve-Path ".").Path
-          $publishDir = (Resolve-Path "artifacts/publish/${{ matrix.runtime }}").Path
-          $outputDir = (Resolve-Path "artifacts/packages").Path
+          $requiredPaths = @(
+            "artifacts/publish/win-x64/TSM.exe",
+            "artifacts/packages",
+            "TSM/Assets/tsm-app.ico",
+            "LICENSE",
+            "packaging/windows/installer.iss"
+          )
+          foreach ($requiredPath in $requiredPaths) {
+            if (-not (Test-Path -LiteralPath $requiredPath)) {
+              throw "Required installer input was not found: $requiredPath"
+            }
+          }
+          $installerScript = (Resolve-Path "packaging/windows/installer.iss").Path
           & $iscc `
             "/DAppVersion=${{ steps.version.outputs.value }}" `
-            "/DProjectRoot=$projectRoot" `
-            "/DPublishDir=$publishDir" `
-            "/DOutputDir=$outputDir" `
-            packaging/windows/installer.iss
+            $installerScript
           if ($LASTEXITCODE -ne 0) {
             throw "Inno Setup failed with exit code $LASTEXITCODE."
           }
