@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using TSM.Services;
 using TSM.ViewModels;
 using TSM.Views;
 
@@ -32,12 +34,25 @@ public sealed partial class App : Application
                     UpdateTrayVisibility();
             };
             UpdateTrayVisibility();
+            if (Program.SingleInstance is { } singleInstance)
+            {
+                singleInstance.ActivationRequested += ActivateExistingWindow;
+                if (singleInstance.ConsumeActivationRequest())
+                    Dispatcher.UIThread.Post(() => _mainWindow?.RestoreFromTray());
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
     private void ShowWindowFromTray(object? sender, EventArgs e) => _mainWindow?.RestoreFromTray();
+
+    private void ActivateExistingWindow(object? sender, EventArgs e)
+    {
+        if (sender is SingleInstanceCoordinator coordinator && !coordinator.ConsumeActivationRequest())
+            return;
+        Dispatcher.UIThread.Post(() => _mainWindow?.RestoreFromTray());
+    }
 
     private async void RefreshFromTray(object? sender, EventArgs e)
     {

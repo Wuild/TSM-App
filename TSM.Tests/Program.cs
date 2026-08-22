@@ -15,6 +15,7 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("persists onboarding and manually managed realm settings", Run(PersistManagedRealms)),
     ("restores application settings to their defaults", Run(ResetApplicationSettings)),
     ("round-trips remembered login through a credential store", Run(StoreRememberedLogin)),
+    ("redirects second launches to the primary app instance", EnforceSingleInstance),
     ("blocks legacy authentication when its transport is disabled", LegacyAuthenticationCanBeDisabled),
     ("authenticates and differentially syncs AppData atomically", AuthenticateAndSyncAppData),
     ("syncs faction-qualified anniversary realm data", SyncFactionQualifiedRealm),
@@ -383,6 +384,21 @@ static void StoreRememberedLogin()
            saved.Password == "keychain-only-password", "saved login did not round-trip");
     service.Delete(key);
     Assert(service.Load(key) is null, "logout did not delete the saved login");
+}
+
+static async Task EnforceSingleInstance()
+{
+    var identifier = $"com.wuild.tsm-test-{Guid.NewGuid():N}";
+    using var primary = new SingleInstanceCoordinator(identifier);
+    Assert(primary.IsPrimary, "the first app launch did not become the primary instance");
+    var activated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    primary.ActivationRequested += (_, _) => activated.TrySetResult();
+
+    using var secondary = new SingleInstanceCoordinator(identifier);
+    Assert(!secondary.IsPrimary, "a second app launch was incorrectly allowed to become primary");
+    await Task.Run(secondary.NotifyPrimaryInstance);
+    await activated.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    Assert(primary.ConsumeActivationRequest(), "the primary app did not retain the activation request");
 }
 
 static void DiscoverPtrVariants()

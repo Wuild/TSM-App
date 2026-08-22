@@ -47,9 +47,11 @@ public sealed class StartupRegistrationService
         File.WriteAllText(path,
             "[Desktop Entry]\n" +
             "Type=Application\n" +
-            "Name=TradeSkillMaster Cross-Platform\n" +
+            "Name=TSM Desktop\n" +
             $"Exec={string.Join(' ', command)}\n" +
             "Terminal=false\n" +
+            "NoDisplay=true\n" +
+            "StartupWMClass=TSM\n" +
             "X-GNOME-Autostart-enabled=true\n");
     }
 
@@ -80,6 +82,9 @@ public sealed class StartupRegistrationService
 
     private static IReadOnlyList<string> BuildCommandParts()
     {
+        if (OperatingSystem.IsLinux() &&
+            Environment.GetEnvironmentVariable("APPIMAGE") is { Length: > 0 } appImage)
+            return [appImage];
         var executable = Environment.ProcessPath ?? throw new InvalidOperationException("Application executable path is unavailable.");
         if (!string.Equals(Path.GetFileNameWithoutExtension(executable), "dotnet", StringComparison.OrdinalIgnoreCase))
             return [executable];

@@ -62,6 +62,8 @@ Automatic updates need write access to the `.app` bundle.
 
 The AppImage must remain writable for automatic installation of updates. If the distribution does not provide FUSE support, run it with `--appimage-extract-and-run` or install the AppImage-compatible FUSE package supplied by the distribution.
 
+Only one TSM Desktop process runs per operating-system user. Launching the app again restores and focuses the existing window, including when it is minimized or hidden in the system tray.
+
 ## First-time setup
 
 1. Start TSM Desktop.

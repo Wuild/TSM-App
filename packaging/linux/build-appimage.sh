@@ -16,12 +16,11 @@ project_dir="$(realpath "$script_dir/../..")"
 app_dir="$(mktemp -d)"
 trap 'rm -rf "$app_dir"' EXIT
 
-mkdir -p "$app_dir/usr/bin" "$app_dir/usr/share/applications" \
+mkdir -p "$app_dir/usr/bin" \
   "$app_dir/usr/share/icons/hicolor/512x512/apps" "$app_dir/usr/share/pixmaps"
 cp -a "$publish_dir/." "$app_dir/usr/bin/"
 cp "$script_dir/AppRun" "$app_dir/AppRun"
 cp "$script_dir/tsm.desktop" "$app_dir/tsm.desktop"
-cp "$script_dir/tsm.desktop" "$app_dir/usr/share/applications/tsm.desktop"
 cp "$project_dir/TSM/Assets/tsm-app.png" "$app_dir/tsm-app.png"
 cp "$project_dir/TSM/Assets/tsm-app.png" "$app_dir/usr/share/icons/hicolor/512x512/apps/tsm-app.png"
 cp "$project_dir/TSM/Assets/tsm-app.png" "$app_dir/usr/share/pixmaps/tsm-app.png"
