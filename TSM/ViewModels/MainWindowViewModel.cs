@@ -92,8 +92,18 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private Task? _updateCheckRunner;
     private CancellationTokenSource? _auctionIconCancellation;
     private readonly Dictionary<AuctionHouseItemViewModel, CancellationTokenSource> _auctionIconLoads = [];
+    private readonly HashSet<string> _queuedAuctionItemKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<AuctionHouseItemViewModel> _visibleAuctionItems = [];
-    private readonly SemaphoreSlim _auctionIconSlots = new(4, 4);
+    private readonly SemaphoreSlim _auctionIconSlots = new(3, 3);
+    private readonly SemaphoreSlim _cachedAuctionIconSlots = new(4, 4);
+    private readonly SemaphoreSlim _tooltipSlot = new(1, 1);
+    private CancellationTokenSource? _activeTooltipCancellation;
+    private Task? _activeTooltipRunner;
+    private AuctionHouseItemViewModel? _activeTooltipItem;
+    private int _auctionItemInfoTotal;
+    private int _auctionItemInfoFinished;
+    private int _auctionItemInfoFailed;
+    private DateTimeOffset? _auctionItemInfoPausedUntil;
     private CancellationTokenSource? _auctionSearchCancellation;
     private Task? _auctionSearchRunner;
     private AuctionSortColumn _auctionSortColumn = AuctionSortColumn.Item;
@@ -127,6 +137,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _auctionHouseService = auctionHouseService;
         _auctionPriceHistory = auctionPriceHistory;
         _itemIconService = itemIconService;
+        _itemIconService.DownloadPaused += ItemInfoDownloadPaused;
         _apiClient = apiClient;
         _syncService = syncService;
         _credentialStore = credentialStore;
@@ -523,6 +534,25 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         get => _auctionResultSummary;
         private set => SetProperty(ref _auctionResultSummary, value);
     }
+    public bool IsAuctionItemInfoStatusVisible => LoadOnlineItemIcons && IsAuctionItemInfoLoading;
+    public bool IsAuctionItemInfoLoading => _auctionItemInfoFinished < _auctionItemInfoTotal;
+    public double AuctionItemInfoProgress => _auctionItemInfoTotal == 0
+        ? 0
+        : Math.Clamp((double)_auctionItemInfoFinished / _auctionItemInfoTotal * 100, 0, 100);
+    public string AuctionItemInfoStatus
+    {
+        get
+        {
+            if (_auctionItemInfoPausedUntil is { } pausedUntil && pausedUntil > DateTimeOffset.UtcNow &&
+                IsAuctionItemInfoLoading)
+                return $"Item info paused · retrying at {pausedUntil.ToLocalTime():HH:mm}";
+            if (IsAuctionItemInfoLoading)
+                return $"Downloading item icons · {_auctionItemInfoFinished:N0} of {_auctionItemInfoTotal:N0} visible items";
+            return _auctionItemInfoFailed > 0
+                ? $"Item info ready · {_auctionItemInfoTotal - _auctionItemInfoFailed:N0} loaded · {_auctionItemInfoFailed:N0} unavailable"
+                : $"Item info ready · {_auctionItemInfoTotal:N0} visible items";
+        }
+    }
     public string AuctionItemSortIndicator => SortIndicator(AuctionSortColumn.Item);
     public string AuctionMinBuyoutSortIndicator => SortIndicator(AuctionSortColumn.MinBuyout);
     public string AuctionRecentSortIndicator => SortIndicator(AuctionSortColumn.Recent);
@@ -552,11 +582,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             OnPropertyChanged(nameof(AuctionItemDrawerItem));
             OnPropertyChanged(nameof(IsAuctionItemDrawerOpen));
             OpenAuctionItemInWowheadCommand.RaiseCanExecuteChanged();
-            if (previous is not null && !_visibleAuctionItems.Contains(previous) &&
-                _auctionIconLoads.TryGetValue(previous, out var previousCancellation))
-                previousCancellation.Cancel();
+            CancelActiveTooltipLoad();
+            if (previous is not null && !_visibleAuctionItems.Contains(previous))
+                previous.UnloadIcon();
             if (value is not null)
-                StartAuctionIconLoad(value);
+                StartAuctionTooltipLoad(value);
         }
     }
     public AuctionHouseItemViewModel? AuctionItemDrawerItem => SelectedAuctionItem;
@@ -1288,6 +1318,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             await _auctionSearchCancellation.CancelAsync();
         if (_auctionIconCancellation is not null)
             await _auctionIconCancellation.CancelAsync();
+        if (_activeTooltipCancellation is not null)
+            await _activeTooltipCancellation.CancelAsync();
         if (_updateCheckCancellation is not null)
             await _updateCheckCancellation.CancelAsync();
         if (_updateCheckRunner is not null)
@@ -1310,11 +1342,23 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             {
             }
         }
+        if (_activeTooltipRunner is not null)
+        {
+            try
+            {
+                await _activeTooltipRunner;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
         _updateCheckCancellation?.Dispose();
         _auctionIconCancellation?.Dispose();
+        _activeTooltipCancellation?.Dispose();
         _auctionSearchCancellation?.Dispose();
         foreach (var item in AuctionResults)
             item.Dispose();
+        _itemIconService.DownloadPaused -= ItemInfoDownloadPaused;
         _itemIconService.Dispose();
         _appUpdates.Dispose();
         await _backgroundSync.DisposeAsync();
@@ -1931,6 +1975,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     {
         SuspendAuctionIconLoading();
         _visibleAuctionItems.Clear();
+        _auctionItemInfoTotal = 0;
+        _auctionItemInfoFinished = 0;
+        _auctionItemInfoFailed = 0;
+        _auctionItemInfoPausedUntil = null;
+        NotifyAuctionItemInfoChanged();
     }
 
     private void SuspendAuctionIconLoading()
@@ -1941,6 +1990,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         foreach (var cancellation in _auctionIconLoads.Values)
             cancellation.Cancel();
         _auctionIconLoads.Clear();
+        _queuedAuctionItemKeys.Clear();
+        CancelActiveTooltipLoad();
+        foreach (var item in AuctionResults)
+            item.UnloadIcon();
     }
 
     private void ResumeAuctionIconLoading()
@@ -1951,7 +2004,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         foreach (var item in _visibleAuctionItems)
             StartAuctionIconLoad(item);
         if (SelectedAuctionItem is not null)
-            StartAuctionIconLoad(SelectedAuctionItem);
+            StartAuctionTooltipLoad(SelectedAuctionItem);
     }
 
     public void SetAuctionItemVisible(AuctionHouseItemViewModel item, bool isVisible)
@@ -1964,9 +2017,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
 
         _visibleAuctionItems.Remove(item);
-        if (!ReferenceEquals(SelectedAuctionItem, item) &&
-            _auctionIconLoads.TryGetValue(item, out var cancellation))
+        if (ReferenceEquals(SelectedAuctionItem, item))
+            return;
+        if (_auctionIconLoads.TryGetValue(item, out var cancellation))
             cancellation.Cancel();
+        item.UnloadIcon();
     }
 
     private void CloseAuctionItemDrawer()
@@ -1976,31 +2031,69 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private void StartAuctionIconLoad(AuctionHouseItemViewModel item)
     {
-        if (!LoadOnlineItemIcons || item.Icon is not null || _auctionIconCancellation is null ||
-            _auctionIconLoads.ContainsKey(item))
+        if (!LoadOnlineItemIcons || _auctionIconCancellation is null || item.Icon is not null)
+            return;
+        if (_auctionIconLoads.ContainsKey(item))
+            return;
+        if (_itemIconService.TryGetCachedIconPath(item.ItemString, item.Flavor, out var cachedPath))
+        {
+            StartCachedAuctionIconLoad(item, cachedPath);
+            return;
+        }
+        var itemKey = ClassificationKey(item.Flavor, item.ItemString);
+        if (!_queuedAuctionItemKeys.Add(itemKey))
             return;
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_auctionIconCancellation.Token);
         _auctionIconLoads[item] = cancellation;
-        _ = LoadAuctionIconAsync(item, cancellation);
+        _auctionItemInfoTotal++;
+        NotifyAuctionItemInfoChanged();
+        _ = LoadAuctionIconAsync(item, itemKey, cancellation);
     }
 
-    private async Task LoadAuctionIconAsync(AuctionHouseItemViewModel row, CancellationTokenSource cancellation)
+    private void StartAuctionTooltipLoad(AuctionHouseItemViewModel item)
+    {
+        if (!LoadOnlineItemIcons || _auctionIconCancellation is null ||
+            item.HasItemDetails && item.Icon is not null)
+            return;
+        CancelActiveTooltipLoad();
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_auctionIconCancellation.Token);
+        _activeTooltipCancellation = cancellation;
+        _activeTooltipItem = item;
+        item.SetItemInfoLoading(true, $"Loading {item.ItemName} item details…");
+        _activeTooltipRunner = LoadAuctionTooltipAsync(item, cancellation);
+    }
+
+    private void CancelActiveTooltipLoad()
+    {
+        var cancellation = _activeTooltipCancellation;
+        _activeTooltipCancellation = null;
+        cancellation?.Cancel();
+        _activeTooltipItem?.SetItemInfoLoading(false);
+        _activeTooltipItem = null;
+    }
+
+    private async Task LoadAuctionTooltipAsync(AuctionHouseItemViewModel row,
+        CancellationTokenSource cancellation)
     {
         var token = cancellation.Token;
         var slotAcquired = false;
+        var failed = false;
         try
         {
-            await _auctionIconSlots.WaitAsync(token);
+            await _tooltipSlot.WaitAsync(token);
             slotAcquired = true;
             var result = await _itemIconService.GetAsync(row.ItemString, row.Flavor, token);
             if (result is null)
+            {
+                failed = true;
                 return;
+            }
             var icon = await Task.Run(() => new Bitmap(result.Path), token);
             try
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    if (token.IsCancellationRequested || !AuctionResults.Contains(row))
+                    if (token.IsCancellationRequested || !ReferenceEquals(SelectedAuctionItem, row))
                         return;
                     row.SetIcon(result, icon);
                     icon = null;
@@ -2017,11 +2110,72 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         catch (Exception exception) when (exception is HttpRequestException or IOException or JsonException or
                                            ArgumentException or UnauthorizedAccessException or ObjectDisposedException)
         {
+            failed = true;
         }
         finally
         {
             if (slotAcquired)
-                _auctionIconSlots.Release();
+                _tooltipSlot.Release();
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_activeTooltipCancellation, cancellation))
+                {
+                    _activeTooltipCancellation = null;
+                    _activeTooltipItem = null;
+                    row.SetItemInfoLoading(false, failed
+                        ? "Item details are temporarily unavailable."
+                        : "Item details loaded.");
+                }
+                cancellation.Dispose();
+            });
+        }
+    }
+
+    private void StartCachedAuctionIconLoad(AuctionHouseItemViewModel item, string path)
+    {
+        if (_auctionIconCancellation is null || _auctionIconLoads.ContainsKey(item))
+            return;
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_auctionIconCancellation.Token);
+        _auctionIconLoads[item] = cancellation;
+        _ = LoadCachedAuctionIconAsync(item, path, cancellation);
+    }
+
+    private async Task LoadCachedAuctionIconAsync(AuctionHouseItemViewModel row, string path,
+        CancellationTokenSource cancellation)
+    {
+        var token = cancellation.Token;
+        var slotAcquired = false;
+        try
+        {
+            await _cachedAuctionIconSlots.WaitAsync(token);
+            slotAcquired = true;
+            var icon = await Task.Run(() => new Bitmap(path), token);
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (token.IsCancellationRequested || !AuctionResults.Contains(row))
+                        return;
+                    row.SetPreviewIcon(icon);
+                    icon = null;
+                });
+            }
+            finally
+            {
+                icon?.Dispose();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception) when (exception is IOException or ArgumentException or
+                                           UnauthorizedAccessException or ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            if (slotAcquired)
+                _cachedAuctionIconSlots.Release();
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (_auctionIconLoads.TryGetValue(row, out var current) && ReferenceEquals(current, cancellation))
@@ -2033,6 +2187,97 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                     StartAuctionIconLoad(row);
             });
         }
+    }
+
+    private async Task LoadAuctionIconAsync(AuctionHouseItemViewModel row, string itemKey,
+        CancellationTokenSource cancellation)
+    {
+        var token = cancellation.Token;
+        var slotAcquired = false;
+        var outcome = 0;
+        try
+        {
+            await _auctionIconSlots.WaitAsync(token);
+            slotAcquired = true;
+            var result = await _itemIconService.GetIconAsync(row.ItemString, row.Flavor, token);
+            if (result is null)
+            {
+                outcome = 2;
+                return;
+            }
+            var icon = await Task.Run(() => new Bitmap(result.Path), token);
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (token.IsCancellationRequested || !AuctionResults.Contains(row))
+                        return;
+                    row.SetPreviewIcon(icon);
+                    icon = null;
+                    outcome = 1;
+                });
+            }
+            finally
+            {
+                icon?.Dispose();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or JsonException or
+                                           ArgumentException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+            outcome = 2;
+        }
+        finally
+        {
+            if (slotAcquired)
+                _auctionIconSlots.Release();
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_auctionIconLoads.TryGetValue(row, out var current) && ReferenceEquals(current, cancellation))
+                {
+                    _auctionIconLoads.Remove(row);
+                    _queuedAuctionItemKeys.Remove(itemKey);
+                    if (outcome == 0)
+                        _auctionItemInfoTotal = Math.Max(_auctionItemInfoFinished, _auctionItemInfoTotal - 1);
+                    else
+                    {
+                        _auctionItemInfoFinished++;
+                        if (outcome == 2)
+                            _auctionItemInfoFailed++;
+                    }
+                    NotifyAuctionItemInfoChanged();
+                }
+                var shouldRestart = cancellation.IsCancellationRequested &&
+                                    (_visibleAuctionItems.Contains(row) || ReferenceEquals(SelectedAuctionItem, row));
+                cancellation.Dispose();
+                if (shouldRestart)
+                    StartAuctionIconLoad(row);
+            });
+        }
+    }
+
+    private void ItemInfoDownloadPaused(DateTimeOffset resumeAt, bool tooltip)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_auctionItemInfoPausedUntil is null || resumeAt > _auctionItemInfoPausedUntil)
+                _auctionItemInfoPausedUntil = resumeAt;
+            if (tooltip && _activeTooltipItem is { } selected)
+                selected.SetItemInfoLoading(true,
+                    $"Item info paused · retrying at {resumeAt.ToLocalTime():HH:mm}");
+            NotifyAuctionItemInfoChanged();
+        });
+    }
+
+    private void NotifyAuctionItemInfoChanged()
+    {
+        OnPropertyChanged(nameof(IsAuctionItemInfoStatusVisible));
+        OnPropertyChanged(nameof(IsAuctionItemInfoLoading));
+        OnPropertyChanged(nameof(AuctionItemInfoProgress));
+        OnPropertyChanged(nameof(AuctionItemInfoStatus));
     }
 
     private void LoadRealmDataStatuses()

@@ -27,6 +27,7 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("decodes and indexes local AuctionDB prices", Run(IndexAuctionHouseSnapshot)),
     ("persists favorite item price history without duplicate snapshots", Run(PersistAuctionPriceHistory)),
     ("caches Wowhead item details and icons by flavor", CacheWowheadItemDetails),
+    ("backs off and retries throttled item detail downloads", RetryThrottledItemDetails),
     ("maps Wowhead item categories and dependent subcategories", Run(MapWowheadItemTaxonomy)),
     ("formats auction currency denominations", Run(FormatAuctionCurrency)),
     ("identifies factions and preserves merged price tooltips", Run(FormatFactionPriceSnapshots))
@@ -241,6 +242,15 @@ static async Task CacheWowheadItemDetails()
         using var client = new HttpClient(handler);
         using var service = new ItemIconService(new AppPaths(temporaryRoot), client);
 
+        var preview = await service.GetIconAsync("i:3041", "Classic Era");
+        Assert(preview is not null && handler.Requests.Count == 1 &&
+               handler.Requests[0].Host == "render.worldofwarcraft.com",
+            "bundled icon mapping did not bypass the tooltip endpoint");
+        var previewResult = preview!;
+        Assert(service.TryGetCachedIconPath("i:3041", "Classic Era", out var cachedPreviewPath) &&
+               cachedPreviewPath == previewResult.Path,
+            "an existing icon was not resolved from disk without entering the download queue");
+
         var first = await service.GetAsync("i:19019", "Classic Era");
         var cached = await service.GetAsync("i:19019", "Classic Era");
 
@@ -273,8 +283,8 @@ static async Task CacheWowheadItemDetails()
                 !line.Text.StartsWith("Max Stack:", StringComparison.OrdinalIgnoreCase) &&
                 !line.Text.StartsWith("Full Stack Sell Price", StringComparison.OrdinalIgnoreCase)),
             "unreliable maximum-stack metadata leaked into item details");
-        Assert(handler.Requests.Count == 2, "a cached lookup unexpectedly contacted Wowhead again");
-        Assert(handler.Requests[0].AbsolutePath.Contains("/classic/tooltip/item/19019", StringComparison.Ordinal),
+        Assert(handler.Requests.Count == 3, "a cached lookup unexpectedly contacted Wowhead again");
+        Assert(handler.Requests[1].AbsolutePath.Contains("/classic/tooltip/item/19019", StringComparison.Ordinal),
             "Classic Era used the wrong Wowhead flavor endpoint");
         Assert(firstResult.Path.Contains(Path.Combine("ItemIcons", "classic"), StringComparison.Ordinal),
             "item cache was not isolated by flavor");
@@ -282,16 +292,39 @@ static async Task CacheWowheadItemDetails()
         var retail = await service.GetAsync("i:19019", "Retail");
         Assert(retail is not null && retail.Path != firstResult.Path,
             "Retail and Classic item cache entries collided");
-        Assert(handler.Requests.Count == 4 && handler.Requests[2].AbsolutePath == "/tooltip/item/19019",
+        Assert(handler.Requests.Count == 5 && handler.Requests[3].AbsolutePath == "/tooltip/item/19019",
             "Retail did not use its own Wowhead endpoint and cache namespace");
 
         var anniversary = await service.GetAsync("i:23446", "Anniversary");
         Assert(anniversary is not null &&
                anniversary.Path.Contains(Path.Combine("ItemIcons", "tbc"), StringComparison.Ordinal),
             "Anniversary item cache did not use its TBC namespace");
-        Assert(handler.Requests.Count == 6 &&
-               handler.Requests[4].AbsolutePath == "/tbc/tooltip/item/23446",
+        Assert(handler.Requests.Count == 7 &&
+               handler.Requests[5].AbsolutePath == "/tbc/tooltip/item/23446",
             "Anniversary item did not use the Wowhead TBC endpoint");
+    }
+    finally
+    {
+        if (Directory.Exists(temporaryRoot))
+            Directory.Delete(temporaryRoot, true);
+    }
+}
+
+static async Task RetryThrottledItemDetails()
+{
+    var temporaryRoot = Path.Combine(Path.GetTempPath(), $"tsm-wowhead-retry-{Guid.NewGuid():N}");
+    try
+    {
+        var handler = new ThrottledWowheadHandler();
+        using var client = new HttpClient(handler);
+        using var service = new ItemIconService(new AppPaths(temporaryRoot), client, TimeSpan.FromMilliseconds(5));
+        var pauseEvents = 0;
+        service.DownloadPaused += (_, _) => pauseEvents++;
+
+        var result = await service.GetAsync("i:19019", "Retail");
+
+        Assert(result is not null && handler.TooltipRequests == 2 && handler.IconRequests == 2 && pauseEvents == 2,
+            "throttled item details were not paused and retried");
     }
     finally
     {
@@ -977,5 +1010,40 @@ sealed class WowheadCacheHandler : HttpMessageHandler
                 }), Encoding.UTF8, "application/json")
             : new ByteArrayContent([0xff, 0xd8, 0xff, 0xd9]);
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+    }
+}
+
+sealed class ThrottledWowheadHandler : HttpMessageHandler
+{
+    public int TooltipRequests { get; private set; }
+    public int IconRequests { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        if (request.RequestUri!.Host != "nether.wowhead.com")
+        {
+            IconRequests++;
+            return Task.FromResult(new HttpResponseMessage(IconRequests == 1
+                ? HttpStatusCode.ServiceUnavailable
+                : HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([0xff, 0xd8, 0xff, 0xd9])
+            });
+        }
+
+        TooltipRequests++;
+        if (TooltipRequests == 1)
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                name = "Thunderfury",
+                quality = 5,
+                icon = "inv_sword_39",
+                tooltip = "<!--scstart2:7--><span>Sword</span><!--scend-->"
+            }), Encoding.UTF8, "application/json")
+        });
     }
 }

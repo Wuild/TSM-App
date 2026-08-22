@@ -17,6 +17,8 @@ public sealed record ItemIconResult(
     IReadOnlyList<ItemTooltipLine> TooltipLines,
     AuctionItemClassification Classification);
 
+public sealed record ItemIconPreviewResult(string Path);
+
 public sealed record ItemTooltipLine(
     string Text,
     string Color,
@@ -31,19 +33,32 @@ public sealed record ItemTooltipLine(
 public sealed partial class ItemIconService : IDisposable
 {
     private const int MaximumIconBytes = 2_000_000;
+    private const int MaximumTooltipAttempts = 5;
+    private const int MaximumIconAttempts = 3;
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
     private readonly AppPaths _paths;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
+    private readonly TimeSpan _tooltipRetryDelay;
+    private readonly TimeSpan _iconRetryDelay;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _cacheLocks = new(StringComparer.Ordinal);
+    private readonly Lazy<IReadOnlyDictionary<string, Dictionary<string, string>>> _bundledIconSlugs;
+    private long _tooltipResumeUtcTicks;
+    private long _iconResumeUtcTicks;
 
-    public ItemIconService(AppPaths paths, HttpClient? httpClient = null)
+    public ItemIconService(AppPaths paths, HttpClient? httpClient = null, TimeSpan? defaultRetryDelay = null)
     {
         _paths = paths;
         _httpClient = httpClient ?? new HttpClient();
         _ownsClient = httpClient is null;
+        _tooltipRetryDelay = defaultRetryDelay ?? TimeSpan.FromSeconds(5);
+        _iconRetryDelay = defaultRetryDelay ?? TimeSpan.FromMinutes(3);
+        _bundledIconSlugs = new Lazy<IReadOnlyDictionary<string, Dictionary<string, string>>>(LoadBundledIconSlugs);
         if (!_httpClient.DefaultRequestHeaders.UserAgent.Any())
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("TSM-Desktop/0.1 (+https://github.com/Wuild/TSM-App)");
     }
+
+    public event Action<DateTimeOffset, bool>? DownloadPaused;
 
     public async Task<ItemIconResult?> GetAsync(string itemString, string flavor,
         CancellationToken cancellationToken = default)
@@ -54,7 +69,7 @@ public sealed partial class ItemIconService : IDisposable
 
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
-        var cacheKey = $"{flavorKey}:{itemId}";
+        var cacheKey = $"tooltip:{flavorKey}:{itemId}";
         var cacheLock = _cacheLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
         await cacheLock.WaitAsync(cancellationToken);
         try
@@ -67,6 +82,66 @@ public sealed partial class ItemIconService : IDisposable
         }
     }
 
+    public async Task<ItemIconPreviewResult?> GetIconAsync(string itemString, string flavor,
+        CancellationToken cancellationToken = default)
+    {
+        var match = NumericItem().Match(itemString);
+        if (!match.Success)
+            return null;
+        var itemId = match.Groups["id"].Value;
+        var flavorKey = ResolveFlavorKey(flavor);
+        var cacheLock = _cacheLocks.GetOrAdd($"tooltip:{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
+        await cacheLock.WaitAsync(cancellationToken);
+        try
+        {
+            var icon = _bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons) &&
+                       flavorIcons.TryGetValue(itemId, out var bundledIcon)
+                ? bundledIcon
+                : (await GetMetadataAsync(itemId, flavorKey, cancellationToken))?.Icon;
+            if (string.IsNullOrWhiteSpace(icon) || !SafeIconName().IsMatch(icon))
+                return null;
+            var cacheDirectory = Path.Combine(_paths.ItemIconDirectory, flavorKey);
+            Directory.CreateDirectory(cacheDirectory);
+            var iconPath = Path.Combine(cacheDirectory, $"{icon}.jpg");
+            if (!File.Exists(iconPath))
+                await DownloadIconAsync(icon, iconPath, false, cancellationToken);
+            return File.Exists(iconPath) ? new ItemIconPreviewResult(iconPath) : null;
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
+    }
+
+    public bool TryGetCachedIconPath(string itemString, string flavor, out string path)
+    {
+        path = string.Empty;
+        var match = NumericItem().Match(itemString);
+        if (!match.Success)
+            return false;
+        var itemId = match.Groups["id"].Value;
+        var flavorKey = ResolveFlavorKey(flavor);
+        string? icon = null;
+        if (_bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons))
+            flavorIcons.TryGetValue(itemId, out icon);
+        if (string.IsNullOrWhiteSpace(icon))
+        {
+            var metadataPath = Path.Combine(_paths.ItemIconDirectory, flavorKey, $"{itemId}.json");
+            try
+            {
+                if (File.Exists(metadataPath))
+                    icon = JsonSerializer.Deserialize<IconMetadata>(File.ReadAllText(metadataPath))?.Icon;
+            }
+            catch (Exception exception) when (exception is IOException or JsonException)
+            {
+            }
+        }
+        if (string.IsNullOrWhiteSpace(icon) || !SafeIconName().IsMatch(icon))
+            return false;
+        path = Path.Combine(_paths.ItemIconDirectory, flavorKey, $"{icon}.jpg");
+        return File.Exists(path);
+    }
+
     public async Task<AuctionItemClassification?> GetClassificationAsync(string itemString, string flavor,
         CancellationToken cancellationToken = default)
     {
@@ -75,7 +150,7 @@ public sealed partial class ItemIconService : IDisposable
             return null;
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
-        var cacheLock = _cacheLocks.GetOrAdd($"{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
+        var cacheLock = _cacheLocks.GetOrAdd($"icon:{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
@@ -116,7 +191,7 @@ public sealed partial class ItemIconService : IDisposable
 
         var iconPath = Path.Combine(cacheDirectory, $"{metadata.Icon}.jpg");
         if (!File.Exists(iconPath))
-            await DownloadIconAsync(metadata.Icon, iconPath, cancellationToken);
+            await DownloadIconAsync(metadata.Icon, iconPath, true, cancellationToken);
 
         if (!File.Exists(iconPath))
             return null;
@@ -179,13 +254,10 @@ public sealed partial class ItemIconService : IDisposable
                 WowItemTaxonomy.Classify(metadata.Quality, 15, 4).QualityName, "Miscellaneous", "Other");
     }
 
-    private async Task DownloadIconAsync(string icon, string iconPath, CancellationToken cancellationToken)
+    private async Task DownloadIconAsync(string icon, string iconPath, bool tooltipPriority,
+        CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get,
-            $"https://wow.zamimg.com/images/wow/icons/large/{icon}.jpg");
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/jpeg"));
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
+        using var response = await GetIconResponseAsync(icon, tooltipPriority, cancellationToken);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength is > MaximumIconBytes)
             return;
@@ -216,15 +288,133 @@ public sealed partial class ItemIconService : IDisposable
         }
     }
 
+    private async Task<HttpResponseMessage> GetIconResponseAsync(string icon, bool tooltipPriority,
+        CancellationToken cancellationToken)
+    {
+        var maximumAttempts = tooltipPriority ? MaximumTooltipAttempts : MaximumIconAttempts;
+        for (var attempt = 1; attempt <= maximumAttempts; attempt++)
+        {
+            await WaitForRequestWindowAsync(tooltipPriority, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                $"https://render.worldofwarcraft.com/eu/icons/56/{icon}.jpg");
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/jpeg"));
+            var response = await SendWithTimeoutAsync(request, HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            if (response.StatusCode == HttpStatusCode.OK)
+                return response;
+
+            var resumeAt = PauseRequests(response, tooltipPriority);
+            if (attempt == maximumAttempts)
+                return response;
+            response.Dispose();
+            await WaitUntilAsync(resumeAt, cancellationToken);
+        }
+
+        throw new HttpRequestException("Item icon could not be downloaded.");
+    }
+
+    private async Task<HttpResponseMessage> SendWithTimeoutAsync(HttpRequestMessage request,
+        HttpCompletionOption completionOption, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(RequestTimeout);
+        try
+        {
+            return await _httpClient.SendAsync(request, completionOption, timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new HttpResponseMessage(HttpStatusCode.RequestTimeout)
+            {
+                RequestMessage = request,
+                ReasonPhrase = "Item request exceeded 30 seconds"
+            };
+        }
+    }
+
+    private static IReadOnlyDictionary<string, Dictionary<string, string>> LoadBundledIconSlugs()
+    {
+        try
+        {
+            using var resource = typeof(ItemIconService).Assembly
+                .GetManifestResourceStream("TSM.Assets.item-icons.json.br");
+            if (resource is null)
+                return new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            using var brotli = new System.IO.Compression.BrotliStream(resource,
+                System.IO.Compression.CompressionMode.Decompress);
+            return JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(brotli) ??
+                   new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException)
+        {
+            return new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     private async Task<HttpResponseMessage> GetTooltipResponseAsync(string itemId, string flavorKey,
         CancellationToken cancellationToken)
     {
-        var response = await _httpClient.GetAsync(BuildTooltipUri(itemId, flavorKey), cancellationToken);
-        if (response.IsSuccessStatusCode || flavorKey != "beta")
-            return response;
+        var requestFlavor = flavorKey;
+        for (var attempt = 1; attempt <= MaximumTooltipAttempts; attempt++)
+        {
+            await WaitForRequestWindowAsync(true, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Get, BuildTooltipUri(itemId, requestFlavor));
+            var response = await SendWithTimeoutAsync(request, HttpCompletionOption.ResponseContentRead,
+                cancellationToken);
+            if (response.StatusCode == HttpStatusCode.OK)
+                return response;
 
-        response.Dispose();
-        return await _httpClient.GetAsync(BuildTooltipUri(itemId, "retail"), cancellationToken);
+            var resumeAt = PauseRequests(response, true);
+            if (attempt == MaximumTooltipAttempts)
+                return response;
+            response.Dispose();
+            requestFlavor = flavorKey == "beta" ? "retail" : flavorKey;
+            await WaitUntilAsync(resumeAt, cancellationToken);
+        }
+
+        throw new HttpRequestException("Item information could not be downloaded.");
+    }
+
+    private async Task WaitForRequestWindowAsync(bool tooltip, CancellationToken cancellationToken)
+    {
+        var resumeAt = new DateTimeOffset(Interlocked.Read(
+            ref tooltip ? ref _tooltipResumeUtcTicks : ref _iconResumeUtcTicks), TimeSpan.Zero);
+        await WaitUntilAsync(resumeAt, cancellationToken);
+    }
+
+    private static async Task WaitUntilAsync(DateTimeOffset resumeAt, CancellationToken cancellationToken)
+    {
+        var delay = resumeAt - DateTimeOffset.UtcNow;
+        if (delay > TimeSpan.Zero)
+            await Task.Delay(delay, cancellationToken);
+    }
+
+    private DateTimeOffset PauseRequests(HttpResponseMessage response, bool tooltip)
+    {
+        var defaultDelay = tooltip ? _tooltipRetryDelay : _iconRetryDelay;
+        var delay = response.Headers.RetryAfter?.Delta ??
+                    response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow ??
+                    defaultDelay;
+        if (delay <= TimeSpan.Zero)
+            delay = defaultDelay;
+        if (delay > TimeSpan.FromMinutes(15))
+            delay = TimeSpan.FromMinutes(15);
+        var requestedResume = DateTimeOffset.UtcNow + delay;
+        var requestedTicks = requestedResume.UtcTicks;
+        while (true)
+        {
+            ref var resumeTicks = ref tooltip ? ref _tooltipResumeUtcTicks : ref _iconResumeUtcTicks;
+            var currentTicks = Interlocked.Read(ref resumeTicks);
+            if (currentTicks >= requestedTicks)
+            {
+                requestedResume = new DateTimeOffset(currentTicks, TimeSpan.Zero);
+                break;
+            }
+            if (Interlocked.CompareExchange(ref resumeTicks, requestedTicks, currentTicks) == currentTicks)
+                break;
+        }
+        DownloadPaused?.Invoke(requestedResume, tooltip);
+        return requestedResume;
     }
 
     private static string ResolveFlavorKey(string flavor)

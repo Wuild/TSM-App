@@ -423,7 +423,18 @@
                 </ListBox>
                 <Border Grid.Row="2" Background="#191919" BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="0,1,0,0" Padding="16,9">
-                  <TextBlock Text="{Binding AuctionResultSummary}" Classes="muted" FontSize="9" />
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                    <TextBlock Text="{Binding AuctionResultSummary}" Classes="muted" FontSize="9"
+                               VerticalAlignment="Center" />
+                    <Grid Grid.Column="1" ColumnDefinitions="110,Auto" ColumnSpacing="9"
+                          IsVisible="{Binding IsAuctionItemInfoStatusVisible}">
+                      <ProgressBar Height="3" Minimum="0" Maximum="100"
+                                   Value="{Binding AuctionItemInfoProgress}"
+                                   VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="{Binding AuctionItemInfoStatus}"
+                                 Classes="muted" FontSize="9" VerticalAlignment="Center" />
+                    </Grid>
+                  </Grid>
                 </Border>
               </Grid>
             </Border>
@@ -432,7 +443,7 @@
                     Background="#121212" BorderBrush="#414141" BorderThickness="1" CornerRadius="4"
                     BoxShadow="0 10 30 0 #90000000" ZIndex="20" ClipToBounds="True"
                     IsVisible="{Binding IsAuctionItemDrawerOpen}">
-              <Grid RowDefinitions="Auto,*">
+              <Grid RowDefinitions="Auto,Auto,*">
                 <Border Background="#191919" BorderBrush="#353535" BorderThickness="0,0,0,1"
                         Padding="14,12" CornerRadius="4,4,0,0">
                   <Grid ColumnDefinitions="52,*,Auto,Auto" ColumnSpacing="8">
@@ -465,7 +476,16 @@
                     </Button>
                   </Grid>
                 </Border>
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                <Border Grid.Row="1" Padding="14,9" Background="#161616"
+                        BorderBrush="#353535" BorderThickness="0,0,0,1"
+                        IsVisible="{Binding AuctionItemDrawerItem.IsItemInfoLoading}">
+                  <Grid RowDefinitions="Auto,Auto" RowSpacing="7">
+                    <TextBlock Text="{Binding AuctionItemDrawerItem.ItemInfoLoadingStatus}"
+                               Classes="muted" FontSize="9" />
+                    <ProgressBar Grid.Row="1" Height="3" IsIndeterminate="True" />
+                  </Grid>
+                </Border>
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                   <StackPanel Spacing="16" Margin="16,14,16,18">
                     <StackPanel Spacing="7">

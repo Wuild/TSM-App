@@ -9,6 +9,8 @@
     <Version>0.1.0</Version>
     <AssemblyName>TSM</AssemblyName>
     <Authors>Wuild</Authors>
+    <Description>Unofficial TradeSkillMaster desktop companion for World of Warcraft on Linux, Windows, and macOS.</Description>
+    <PackageTags>TradeSkillMaster;TSM;World of Warcraft;WoW;Linux;AppImage;Auction House;AppHelper</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Wuild/TSM-App</RepositoryUrl>
   </PropertyGroup>
@@ -36,5 +38,6 @@
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="Assets/item-icons.json.br" LogicalName="TSM.Assets.item-icons.json.br" />
   </ItemGroup>
 </Project>

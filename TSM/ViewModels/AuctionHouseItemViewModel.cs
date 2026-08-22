@@ -13,6 +13,9 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
     private string _qualityColor = "#52575C";
     private string _itemName;
     private bool _isFavorite;
+    private bool _isItemInfoLoading;
+    private bool _hasItemDetails;
+    private string _itemInfoLoadingStatus = "Loading item details…";
     private IReadOnlyList<AuctionPriceHistoryPoint> _priceHistory;
     private string _wowheadDetails = string.Empty;
     private IReadOnlyList<ItemTooltipLine> _itemDetails =
@@ -70,6 +73,17 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
     }
     public string FavoriteColor => IsFavorite ? "#F2A93B" : "#737A81";
     public string FavoriteToolTip => IsFavorite ? "Remove from favorites" : "Add to favorites";
+    public bool IsItemInfoLoading
+    {
+        get => _isItemInfoLoading;
+        private set => SetProperty(ref _isItemInfoLoading, value);
+    }
+    public string ItemInfoLoadingStatus
+    {
+        get => _itemInfoLoadingStatus;
+        private set => SetProperty(ref _itemInfoLoadingStatus, value);
+    }
+    public bool HasItemDetails => _hasItemDetails;
     public IReadOnlyList<AuctionPriceHistoryPoint> PriceHistory => _priceHistory;
     public bool HasPriceHistory => PriceHistory.Count > 0;
     public bool HasPriceChart => PriceHistory.Count > 1;
@@ -148,6 +162,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
         if ((ItemName == ItemString || string.IsNullOrWhiteSpace(ItemName)) && !string.IsNullOrWhiteSpace(result.Name))
             ItemName = result.Name;
         _wowheadDetails = result.TooltipText;
+        _hasItemDetails = true;
         if (result.TooltipLines.Count > 0)
             _itemDetails = result.TooltipLines;
         QualityColor = result.Quality switch
@@ -164,6 +179,26 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
         };
         OnPropertyChanged(nameof(ItemDetails));
         OnPropertyChanged(nameof(TooltipText));
+        OnPropertyChanged(nameof(HasItemDetails));
+    }
+
+    public void SetPreviewIcon(Bitmap icon)
+    {
+        Icon?.Dispose();
+        Icon = icon;
+    }
+
+    public void UnloadIcon()
+    {
+        var icon = Icon;
+        Icon = null;
+        icon?.Dispose();
+    }
+
+    public void SetItemInfoLoading(bool isLoading, string status = "Loading item details…")
+    {
+        ItemInfoLoadingStatus = status;
+        IsItemInfoLoading = isLoading;
     }
 
     public void SetPriceHistory(IReadOnlyList<AuctionPriceHistoryPoint> history)
@@ -185,7 +220,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
         return prices.Length == 0 ? null : maximum ? prices.Max() : prices.Min();
     }
 
-    public void Dispose() => Icon?.Dispose();
+    public void Dispose() => UnloadIcon();
 }
 
 public sealed record AuctionPriceSnapshotViewModel(

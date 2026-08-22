@@ -1,8 +1,10 @@
-# TSM Desktop
+# TSM Desktop for Linux, Windows, and macOS
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
 
-TSM Desktop is a native cross-platform companion for TradeSkillMaster. It discovers local World of Warcraft clients, keeps AppHelper realm data synchronized, displays addon status, exports Accounting data, and provides an in-app Auction House browser using local TSM data.
+**TSM Desktop is an unofficial TradeSkillMaster companion with first-class Linux support.** It provides a self-contained x86_64 AppImage for World of Warcraft players looking for a native TSM desktop app on Linux, alongside Windows and Apple Silicon macOS packages.
+
+The app discovers local World of Warcraft clients, keeps TradeSkillMaster AppHelper realm data synchronized, manages addon updates, exports Accounting data, and provides an in-app Auction House browser using local TSM data.
 
 > [!IMPORTANT]
 > TSM Desktop is an independent, unofficial personal project. It is not affiliated with, authorized by, sponsored by, endorsed by, or supported by TradeSkillMaster LLC, Blizzard Entertainment, Wowhead, ZAM Network, or their affiliates. See the full [project notice](NOTICE.md).
@@ -18,6 +20,12 @@ Windows ARM, Linux ARM, and macOS Intel packages are not produced.
 ## Download
 
 Download the installer for your system from [GitHub Releases](https://github.com/Wuild/TSM-App/releases/latest). Installers are self-contained, so the .NET runtime does not need to be installed separately. ZIP files attached to releases are portable update packages and are not the recommended installation method.
+
+### TradeSkillMaster desktop app for Linux
+
+Linux is a primary supported platform for this project. The x86_64 AppImage works across major desktop distributions without requiring the .NET runtime or a distribution-specific package. It includes the application icon, desktop metadata, automatic update support, system-tray integration, Linux Secret Service credential storage, and automatic detection of supported World of Warcraft installations.
+
+Use the AppImage if you are searching for an unofficial TSM app on Ubuntu, Linux Mint, Fedora, Arch Linux, Manjaro, openSUSE, Debian, or another x86_64 Linux desktop distribution. Distribution-specific packages and ARM builds are not currently provided.
 
 ## Install
 
@@ -90,13 +98,14 @@ The Auction House workspace reads local AppHelper AuctionDB snapshots. It suppor
 
 - item-name search
 - realm and faction filters
-- category, subcategory, and quality filters
 - sortable price and market-statistic columns
 - flavor-aware Wowhead item details and icons
 - favorites pinned above other results
 - local price-history charts for favorited items
 
 Favoriting an item begins collecting price snapshots from future realm synchronizations. Price history is local and is not retroactively available before tracking starts.
+
+Releases include a compressed item-ID-to-icon-slug manifest, not item images or tooltip text. Visible rows use that manifest to request icons directly from Blizzard's media CDN. If an item is not yet mapped, its icon slug is learned and cached on demand. Full tooltip presentation is reserved for an opened item drawer.
 
 If the Auction House is empty, verify that AppHelper is installed and synchronize the realm again. Online Wowhead enrichment can be disabled under **Settings → Advanced** without disabling local prices.
 
@@ -174,6 +183,28 @@ This directory contains settings, cached item data, local price history, and fal
 
 The initial identity password exchange uses HTTPS, but compatibility with the legacy private TSM session protocol includes plain HTTP requests. Use the application only on a trusted network. Access and session tokens stay in memory, and returned data-download URLs are upgraded to HTTPS.
 
+## Linux FAQ
+
+### Is this an official TradeSkillMaster Linux client?
+
+No. TSM Desktop is an independent, unofficial compatibility project. The name TradeSkillMaster is used only to explain which addon data and services the app interoperates with.
+
+### How do I run TradeSkillMaster desktop features on Linux?
+
+Download the latest `TSM-<version>-x86_64.AppImage` from GitHub Releases, make it executable, and launch it from a writable location. Point onboarding at the World of Warcraft directory containing `_retail_`, `_classic_`, or another supported client folder.
+
+### Which Linux distributions are supported?
+
+The AppImage targets x86_64 Linux desktops rather than one specific distribution. It is intended for distributions including Ubuntu, Debian, Linux Mint, Fedora, Arch Linux, Manjaro, and openSUSE. Exact compatibility depends on the distribution's AppImage and desktop support.
+
+### Does the Linux app update itself?
+
+Yes. Automatic checks are configurable, manual checks are available in Settings, and automatic installation is optional. The AppImage must remain in a writable location for in-place updates.
+
+### Does it manage the TradeSkillMaster addon too?
+
+Yes. The app detects installed World of Warcraft flavors and TSM addons, checks the selected release channel, and can update, reinstall, or remove supported addon installations.
+
 ## Build from source
 
 Install the .NET 10 SDK, then run:
@@ -193,6 +224,12 @@ Create a Linux AppImage after publishing:
 ```bash
 dotnet publish TSM/TSM.csproj -c Release -r linux-x64 --self-contained true -o artifacts/publish/linux-x64
 packaging/linux/build-appimage.sh artifacts/publish/linux-x64 artifacts/packages 0.1.0 /path/to/appimagetool x86_64
+```
+
+Maintainers can rebuild the bundled icon manifest from an existing local item cache with:
+
+```bash
+scripts/generate-item-icon-manifest.sh ~/.local/share/TSM-CrossPlatform/ItemIcons TSM/Assets/item-icons.json.br
 ```
 
 Pushing a version tag such as `v0.2.0` runs the release workflow and publishes a Windows x64 setup executable, a macOS Apple Silicon DMG, a Linux x64 AppImage, and portable ZIPs used by the automatic updater. Older temporary workflow artifacts are removed after a successful release; GitHub Release downloads are retained.

@@ -189,6 +189,12 @@ jobs:
         with:
           files: artifacts/packages/*
           generate_release_notes: true
+          body: |
+            ## Unofficial TradeSkillMaster desktop app for Linux
+
+            Linux x86_64 users can download the self-contained `.AppImage`; no separate .NET runtime is required. The app provides local AppHelper realm synchronization, TSM addon management, Accounting export, and an Auction House browser for World of Warcraft on Linux.
+
+            Download the `.exe` installer for Windows x64 or the `.dmg` for Apple Silicon macOS. This independent project is not affiliated with or endorsed by TradeSkillMaster, Blizzard Entertainment, or Wowhead.
           prerelease: ${{ contains(github.ref_name, '-') }}
 
   cleanup-old-artifacts:

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.wuild.TSMDesktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>TSM Desktop</name>
+  <summary>Unofficial TradeSkillMaster companion for Linux</summary>
+  <description>
+    <p>
+      TSM Desktop is an independent TradeSkillMaster companion for World of Warcraft players on Linux.
+      It synchronizes local AppHelper realm data, manages TSM addon updates, exports Accounting data,
+      and displays local Auction House prices.
+    </p>
+    <p>
+      The self-contained x86_64 AppImage supports automatic updates, system-tray operation, multiple
+      World of Warcraft flavors, and credentials protected by the Linux Secret Service.
+    </p>
+    <p>
+      This application is unofficial and is not affiliated with or endorsed by TradeSkillMaster,
+      Blizzard Entertainment, or Wowhead.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.wuild.TSMDesktop.desktop</launchable>
+  <developer id="com.wuild">
+    <name>Wuild</name>
+  </developer>
+  <url type="homepage">https://github.com/Wuild/TSM-App</url>
+  <url type="bugtracker">https://github.com/Wuild/TSM-App/issues</url>
+  <url type="help">https://github.com/Wuild/TSM-App#linux-faq</url>
+  <provides>
+    <binary>TSM</binary>
+  </provides>
+  <categories>
+    <category>Game</category>
+  </categories>
+  <keywords>
+    <keyword>TradeSkillMaster</keyword>
+    <keyword>TSM</keyword>
+    <keyword>World of Warcraft</keyword>
+    <keyword>WoW</keyword>
+    <keyword>Auction House</keyword>
+    <keyword>AppHelper</keyword>
+    <keyword>addon</keyword>
+  </keywords>
+  <content_rating type="oars-1.1" />
+</component>
