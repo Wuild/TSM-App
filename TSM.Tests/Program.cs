@@ -97,6 +97,11 @@ static void ResetApplicationSettings()
         WindowHeight = 999,
         WindowMaximized = true,
         AuctionFavorites = [new AuctionFavorite("Retail", "i:19019")],
+        SelectedAccountingAccount = "TBC · Account",
+        SelectedAccountingRealm = "Thunderstrike",
+        SelectedAccountingPlayer = "Bankalt",
+        SelectedAuctionRealm = "Anniversary · Thunderstrike",
+        SelectedAuctionFaction = "Alliance",
         ManagedRealms = [new ManagedRealmSelection("retail", "EU", "Draenor", "1")]
     };
     settings.ResetToDefaults();
@@ -106,6 +111,11 @@ static void ResetApplicationSettings()
            settings.HasCompletedOnboarding == defaults.HasCompletedOnboarding &&
            settings.WindowWidth == defaults.WindowWidth && settings.WindowHeight == defaults.WindowHeight &&
            settings.WindowMaximized == defaults.WindowMaximized && settings.AuctionFavorites.Count == 0 &&
+           settings.SelectedAccountingAccount == defaults.SelectedAccountingAccount &&
+           settings.SelectedAccountingRealm == defaults.SelectedAccountingRealm &&
+           settings.SelectedAccountingPlayer == defaults.SelectedAccountingPlayer &&
+           settings.SelectedAuctionRealm == defaults.SelectedAuctionRealm &&
+           settings.SelectedAuctionFaction == defaults.SelectedAuctionFaction &&
            settings.ManagedRealms.Count == 0,
         "one or more application preferences survived a full reset");
 }
@@ -203,6 +213,11 @@ static void PersistManagedRealms()
             AuctionSortColumn = "MinBuyout",
             AuctionSortDescending = true,
             AuctionFavorites = [new AuctionFavorite("Retail", "i:19019")],
+            SelectedAccountingAccount = "TBC · Account",
+            SelectedAccountingRealm = "Thunderstrike",
+            SelectedAccountingPlayer = "Bankalt",
+            SelectedAuctionRealm = "Anniversary · Thunderstrike",
+            SelectedAuctionFaction = "Horde",
             WindowWidth = 1440,
             WindowHeight = 900,
             WindowX = 120,
@@ -223,6 +238,13 @@ static void PersistManagedRealms()
             "auction sorting preference did not survive settings reload");
         Assert(loaded.AuctionFavorites.Single() == settings.AuctionFavorites.Single(),
             "auction favorite did not survive settings reload");
+        Assert(loaded.SelectedAccountingAccount == settings.SelectedAccountingAccount &&
+               loaded.SelectedAccountingRealm == settings.SelectedAccountingRealm &&
+               loaded.SelectedAccountingPlayer == settings.SelectedAccountingPlayer,
+            "accounting selections did not survive settings reload");
+        Assert(loaded.SelectedAuctionRealm == settings.SelectedAuctionRealm &&
+               loaded.SelectedAuctionFaction == settings.SelectedAuctionFaction,
+            "auction selections did not survive settings reload");
         Assert(loaded.WindowWidth == 1440 && loaded.WindowHeight == 900 && loaded.WindowX == 120 &&
                loaded.WindowY == 80 && loaded.WindowMaximized,
             "window placement did not survive settings reload");

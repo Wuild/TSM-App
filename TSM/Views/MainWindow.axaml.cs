@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using System.Diagnostics;
 using TSM.ViewModels;
 using TSM.Models;
+using TSM.Services;
 
 namespace TSM.Views;
 
@@ -225,7 +226,8 @@ public sealed partial class MainWindow : Window
             return true;
         if (!IsVisible)
             RestoreFromTray();
-        return await new ConfirmExitDialog().ShowDialog<bool>(this);
+        var nativeResult = await NativeConfirmationService.ConfirmExitAsync(this);
+        return nativeResult ?? await new ConfirmExitDialog().ShowDialog<bool>(this);
     }
 
     private async void HandleClosing(object? sender, WindowClosingEventArgs e)

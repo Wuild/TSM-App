@@ -28,6 +28,11 @@ public sealed class AppSettings : ObservableObject
     private bool _hasCompletedOnboarding;
     private string _auctionSortColumn = "Item";
     private bool _auctionSortDescending;
+    private string _selectedAccountingAccount = string.Empty;
+    private string _selectedAccountingRealm = string.Empty;
+    private string _selectedAccountingPlayer = "All players";
+    private string _selectedAuctionRealm = "All realms";
+    private string _selectedAuctionFaction = "Both";
     private List<ManagedRealmSelection> _managedRealms = [];
     private List<ManagedRealmSelection> _hiddenLocalRealms = [];
     private List<AuctionFavorite> _auctionFavorites = [];
@@ -73,6 +78,34 @@ public sealed class AppSettings : ObservableObject
         get => _auctionSortDescending;
         set => SetProperty(ref _auctionSortDescending, value);
     }
+    public string SelectedAccountingAccount
+    {
+        get => _selectedAccountingAccount;
+        set => SetProperty(ref _selectedAccountingAccount, value ?? string.Empty);
+    }
+    public string SelectedAccountingRealm
+    {
+        get => _selectedAccountingRealm;
+        set => SetProperty(ref _selectedAccountingRealm, value ?? string.Empty);
+    }
+    public string SelectedAccountingPlayer
+    {
+        get => _selectedAccountingPlayer;
+        set => SetProperty(ref _selectedAccountingPlayer,
+            string.IsNullOrWhiteSpace(value) ? "All players" : value);
+    }
+    public string SelectedAuctionRealm
+    {
+        get => _selectedAuctionRealm;
+        set => SetProperty(ref _selectedAuctionRealm,
+            string.IsNullOrWhiteSpace(value) ? "All realms" : value);
+    }
+    public string SelectedAuctionFaction
+    {
+        get => _selectedAuctionFaction;
+        set => SetProperty(ref _selectedAuctionFaction,
+            value is "Alliance" or "Horde" or "Both" ? value : "Both");
+    }
     public List<ManagedRealmSelection> ManagedRealms { get => _managedRealms; set => SetProperty(ref _managedRealms, value ?? []); }
     public List<ManagedRealmSelection> HiddenLocalRealms { get => _hiddenLocalRealms; set => SetProperty(ref _hiddenLocalRealms, value ?? []); }
     public List<AuctionFavorite> AuctionFavorites { get => _auctionFavorites; set => SetProperty(ref _auctionFavorites, value ?? []); }
@@ -117,6 +150,11 @@ public sealed class AppSettings : ObservableObject
         HasCompletedOnboarding = defaults.HasCompletedOnboarding;
         AuctionSortColumn = defaults.AuctionSortColumn;
         AuctionSortDescending = defaults.AuctionSortDescending;
+        SelectedAccountingAccount = defaults.SelectedAccountingAccount;
+        SelectedAccountingRealm = defaults.SelectedAccountingRealm;
+        SelectedAccountingPlayer = defaults.SelectedAccountingPlayer;
+        SelectedAuctionRealm = defaults.SelectedAuctionRealm;
+        SelectedAuctionFaction = defaults.SelectedAuctionFaction;
         ManagedRealms = [];
         HiddenLocalRealms = [];
         AuctionFavorites = [];

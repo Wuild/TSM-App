@@ -167,6 +167,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _notifications = notifications;
         _appUpdates = appUpdates;
         Settings = settings;
+        _selectedAccountingPlayer = settings.SelectedAccountingPlayer;
+        _selectedAuctionRealm = settings.SelectedAuctionRealm;
+        _selectedAuctionFaction = settings.SelectedAuctionFaction;
         _selectedAccountingPeriod = AccountingPeriods[^1];
         _syncFreshnessTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _syncFreshnessTimer.Tick += (_, _) => NotifySyncFreshnessChanged();
@@ -560,6 +563,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (!SetProperty(ref _selectedAccount, value))
                 return;
+            Settings.SelectedAccountingAccount = value?.DisplayName ?? string.Empty;
+            PersistSelectionSettings();
             var wasSuppressed = _suppressAccountingRefresh;
             _suppressAccountingRefresh = true;
             try
@@ -582,6 +587,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetProperty(ref _selectedRealm, value))
             {
+                Settings.SelectedAccountingRealm = value ?? string.Empty;
+                PersistSelectionSettings();
                 ResetAccountingPlayerSelection();
                 InvalidateAccountingStatistics();
             }
@@ -600,6 +607,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetProperty(ref _selectedAccountingPlayer, value ?? "All players"))
             {
+                Settings.SelectedAccountingPlayer = _selectedAccountingPlayer;
+                PersistSelectionSettings();
                 OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
                 InvalidateAccountingStatistics();
             }
@@ -647,7 +656,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         set
         {
             if (SetProperty(ref _selectedAuctionRealm, value))
+            {
+                Settings.SelectedAuctionRealm = value ?? "All realms";
+                PersistSelectionSettings();
                 QueueAuctionSearch();
+            }
         }
     }
     public string SelectedAuctionFaction
@@ -656,7 +669,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         set
         {
             if (SetProperty(ref _selectedAuctionFaction, value))
+            {
+                Settings.SelectedAuctionFaction = value;
+                PersistSelectionSettings();
                 QueueAuctionSearch();
+            }
         }
     }
     public bool ShowAdvancedAuctionFilters
@@ -1402,6 +1419,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         RefreshLocalData();
     }
 
+    private void PersistSelectionSettings() => _settingsStore.Save(Settings);
+
     private void ApplyStartupRegistration()
     {
         try
@@ -1874,6 +1893,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             return;
         }
         _selectedAccountingPlayer = "All players";
+        Settings.SelectedAccountingPlayer = _selectedAccountingPlayer;
+        PersistSelectionSettings();
         OnPropertyChanged(nameof(SelectedAccountingPlayer));
         OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
     }
@@ -2124,6 +2145,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void LoadAccountingAccounts()
     {
         var previous = SelectedAccount?.DisplayName;
+        if (string.IsNullOrWhiteSpace(previous))
+            previous = Settings.SelectedAccountingAccount;
+        var previousPlayer = SelectedAccountingPlayer;
         var accounts = _accountingService.FindAccounts(_installations);
         if (!AccountingAccounts.SequenceEqual(accounts))
         {
@@ -2140,6 +2164,13 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             {
                 _suppressAccountingRefresh = false;
             }
+            _selectedAccountingPlayer = string.IsNullOrWhiteSpace(previousPlayer)
+                ? "All players"
+                : previousPlayer;
+            Settings.SelectedAccountingPlayer = _selectedAccountingPlayer;
+            PersistSelectionSettings();
+            OnPropertyChanged(nameof(SelectedAccountingPlayer));
+            OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
         }
         if (AccountingAccounts.Count == 0)
             AccountingStatisticsStatus = "No TradeSkillMaster.lua account data was found.";
@@ -2147,7 +2178,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private void LoadAuctionIndex()
     {
-        var previousRealm = SelectedAuctionRealm;
+        var previousRealm = string.IsNullOrWhiteSpace(SelectedAuctionRealm)
+            ? Settings.SelectedAuctionRealm
+            : SelectedAuctionRealm;
         try
         {
             _auctionIndex = _auctionHouseService.BuildIndex(AccountingAccounts, _installations);
@@ -2987,6 +3020,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void LoadAccountingRealms()
     {
         var previous = SelectedRealm;
+        if (string.IsNullOrWhiteSpace(previous))
+            previous = Settings.SelectedAccountingRealm;
         IReadOnlyList<string> realms = [];
         if (SelectedAccount is not null)
         {

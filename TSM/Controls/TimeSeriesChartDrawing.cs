@@ -17,7 +17,8 @@ internal static class TimeSeriesChartDrawing
         long maximum,
         DateTimeOffset first,
         DateTimeOffset last,
-        int valueIntervals = 3)
+        int valueIntervals = 3,
+        int timeIntervals = 2)
     {
         var gridPen = new Pen(GridBrush, 1);
         for (var index = 0; index <= valueIntervals; index++)
@@ -30,9 +31,10 @@ internal static class TimeSeriesChartDrawing
             context.DrawText(label, new Point(Math.Max(0, plot.Left - label.Width - 7), y - label.Height / 2));
         }
 
-        for (var index = 0; index <= 2; index++)
+        timeIntervals = Math.Max(1, timeIntervals);
+        for (var index = 0; index <= timeIntervals; index++)
         {
-            var ratio = index / 2d;
+            var ratio = index / (double)timeIntervals;
             var x = plot.Left + ratio * plot.Width;
             context.DrawLine(gridPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
             var timestamp = first + TimeSpan.FromTicks((long)((last - first).Ticks * ratio));

@@ -57,7 +57,9 @@ public sealed class AccountingGoldChart : Control
         var first = points[0].Timestamp;
         var duration = Math.Max(1, (points[^1].Timestamp - first).TotalSeconds);
         var plot = new Rect(58, 8, Math.Max(1, bounds.Width - 68), Math.Max(1, bounds.Height - 34));
-        TimeSeriesChartDrawing.DrawAxes(context, plot, minimum, maximum, first, points[^1].Timestamp, 4);
+        var timeIntervals = TimeIntervalsFor(points[^1].Timestamp - first, plot.Width);
+        TimeSeriesChartDrawing.DrawAxes(context, plot, minimum, maximum, first, points[^1].Timestamp,
+            4, timeIntervals);
         Point Plot(AccountingGoldPoint point) => new(
             points.Length == 1 ? plot.Left + plot.Width / 2 : plot.Left + (point.Timestamp - first).TotalSeconds / duration * plot.Width,
             plot.Bottom - (point.BalanceCopper - minimum) / (double)range * plot.Height);
@@ -145,5 +147,20 @@ public sealed class AccountingGoldChart : Control
             _pointerRenderQueued = false;
             InvalidateVisual();
         }, DispatcherPriority.Render);
+    }
+
+    private static int TimeIntervalsFor(TimeSpan span, double width)
+    {
+        var maximum = Math.Clamp((int)(width / 58), 2, 12);
+        var desired = span.TotalDays switch
+        {
+            >= 330 => 12,
+            >= 120 => (int)Math.Ceiling(span.TotalDays / 30.5),
+            >= 28 => (int)Math.Ceiling(span.TotalDays / 7),
+            >= 7 => (int)Math.Ceiling(span.TotalDays),
+            >= 1 => (int)Math.Ceiling(span.TotalHours / 6),
+            _ => 4
+        };
+        return Math.Clamp(desired, 2, maximum);
     }
 }
