@@ -129,7 +129,10 @@ public sealed class GitHubUpdateService : IDisposable
         var directory = Path.GetDirectoryName(appImagePath)
                         ?? throw new InvalidOperationException("The AppImage directory could not be resolved.");
         EnsureDirectoryWritable(directory);
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), $"tsm-update-{Guid.NewGuid():N}");
         var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(appImagePath)}.{Guid.NewGuid():N}.update");
+        var helperStarted = false;
+        Directory.CreateDirectory(temporaryRoot);
         try
         {
             await DownloadAsync(download, temporaryPath, progress, cancellationToken);
@@ -139,12 +142,31 @@ public sealed class GitHubUpdateService : IDisposable
                 UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
                 UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
             File.Move(temporaryPath, appImagePath, true);
-            Process.Start(new ProcessStartInfo(appImagePath) { UseShellExecute = true });
+            var helperPath = Path.Combine(temporaryRoot, "restart-update.sh");
+            File.WriteAllText(helperPath, AppImageUpdaterScript);
+            File.SetUnixFileMode(helperPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var startInfo = new ProcessStartInfo("/bin/sh")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = temporaryRoot
+            };
+            startInfo.ArgumentList.Add(helperPath);
+            startInfo.ArgumentList.Add(Environment.ProcessId.ToString());
+            startInfo.ArgumentList.Add(appImagePath);
+            startInfo.ArgumentList.Add(temporaryRoot);
+            _ = Process.Start(startInfo) ??
+                throw new InvalidOperationException("The AppImage restart helper could not be started.");
+            helperStarted = true;
+            progress?.Report(new AppUpdateProgress("Update ready. Restarting TSM…"));
         }
         finally
         {
             if (File.Exists(temporaryPath))
                 File.Delete(temporaryPath);
+            if (!helperStarted && Directory.Exists(temporaryRoot))
+                Directory.Delete(temporaryRoot, true);
         }
     }
 
@@ -475,7 +497,8 @@ public sealed class GitHubUpdateService : IDisposable
             } catch {
               Write-UpdateLog "The update succeeded but backup cleanup failed: $_"
             }
-            Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe')
+            $newProcess = Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe') -WorkingDirectory $TargetDirectory -PassThru
+            Write-UpdateLog "Started updated application as process $($newProcess.Id)."
           } catch {
             Write-UpdateLog "Installation failed: $_"
             if (Test-Path -LiteralPath $TargetDirectory) {
@@ -490,7 +513,8 @@ public sealed class GitHubUpdateService : IDisposable
             try { Move-Item -LiteralPath $backup -Destination $TargetDirectory } catch { Write-UpdateLog "Rollback failed: $_" }
           }
           if (Test-Path -LiteralPath (Join-Path $TargetDirectory 'TSM.exe')) {
-            Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe')
+            $restoredProcess = Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe') -WorkingDirectory $TargetDirectory -PassThru
+            Write-UpdateLog "Started restored application as process $($restoredProcess.Id)."
           }
         } finally {
           Start-Sleep -Milliseconds 500
@@ -499,6 +523,22 @@ public sealed class GitHubUpdateService : IDisposable
             try { Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force } catch { Write-UpdateLog "Cleanup failed: $_" }
           }
         }
+        """;
+
+    private const string AppImageUpdaterScript =
+        """
+        process_id="$1"
+        appimage_path="$2"
+        temporary_root="$3"
+        while kill -0 "$process_id" 2>/dev/null; do sleep 0.2; done
+        cd /tmp || exit 1
+        chmod +x -- "$appimage_path"
+        nohup "$appimage_path" >/dev/null 2>&1 &
+        new_process_id=$!
+        sleep 1
+        if ! kill -0 "$new_process_id" 2>/dev/null; then exit 1; fi
+        rm -rf -- "$temporary_root"
+        exit 0
         """;
 
     private const string MacUpdaterScript =
