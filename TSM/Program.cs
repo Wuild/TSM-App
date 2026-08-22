@@ -11,6 +11,7 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        GlobalErrorService.Initialize(new AppPaths().ErrorLogFile);
         using var singleInstance = new SingleInstanceCoordinator("com.wuild.tsm-desktop");
         if (!singleInstance.IsPrimary)
         {

@@ -4,7 +4,7 @@
 
 **TSM Desktop is an unofficial TradeSkillMaster companion with first-class Linux support.** It provides a self-contained x86_64 AppImage for World of Warcraft players looking for a native TSM desktop app on Linux, alongside Windows and Apple Silicon macOS packages.
 
-The app discovers local World of Warcraft clients, keeps TradeSkillMaster AppHelper realm data synchronized, manages addon updates, exports Accounting data, and provides an in-app Auction House browser using local TSM data.
+The app discovers local World of Warcraft clients, keeps TradeSkillMaster AppHelper realm data synchronized, manages addon updates, visualizes and exports Accounting data, and provides an in-app Auction House browser using local TSM data.
 
 > [!IMPORTANT]
 > TSM Desktop is an independent, unofficial personal project. It is not affiliated with, authorized by, sponsored by, endorsed by, or supported by TradeSkillMaster LLC, Blizzard Entertainment, Wowhead, ZAM Network, or their affiliates. See the full [project notice](NOTICE.md).
@@ -99,19 +99,25 @@ The Auction House workspace reads local AppHelper AuctionDB snapshots. It suppor
 - item-name search
 - realm and faction filters
 - sortable price and market-statistic columns
-- flavor-aware Wowhead item details and icons
+- flavor-aware offline item details backed by a bundled SQLite catalog
 - favorites pinned above other results
 - local price-history charts for favorited items
 
 Favoriting an item begins collecting price snapshots from future realm synchronizations. Price history is local and is not retroactively available before tracking starts.
 
-Releases include a compressed item-ID-to-icon-slug manifest, not item images or tooltip text. Visible rows use that manifest to request icons directly from Blizzard's media CDN. If an item is not yet mapped, its icon slug is learned and cached on demand. Full tooltip presentation is reserved for an opened item drawer.
+Releases include a read-only SQLite item catalog. Indexed columns provide item names, quality, class, subclass, equipment slot, level, sell price, and icon slugs without loading the database into memory. Structured Blizzard preview data is compressed per row and is only decompressed when an item drawer opens. Item images are still downloaded from Blizzard's media CDN as they enter the viewport and cached locally.
+
+The current bundled catalog covers active Anniversary TBC items. Flavors not yet present in SQLite continue to use local TSM names and the existing Wowhead fallback until their Blizzard catalog has been built.
 
 If the Auction House is empty, verify that AppHelper is installed and synchronize the realm again. Online Wowhead enrichment can be disabled under **Settings → Advanced** without disabling local prices.
 
-### Accounting export
+### Accounting statistics and export
 
-Open **Accounting**, select an account and realm, choose the data types to include, and export. CSV files are written to the desktop when available, otherwise to the application data directory under `Exports`.
+Open **Accounting**, then choose an account, realm, player, and time range. The app reads the local TradeSkillMaster SavedVariables file and shows recorded character gold, sales and purchases, profit, daily activity, and top items. It does not upload this history.
+
+The chart uses TSM's recorded per-character gold snapshots. Sales and purchase totals use TSM's local Accounting transaction history, so the page only contains periods captured by the addon. Money transfers, repair bills, and postage are excluded from auction earnings and spending.
+
+Select the data types at the bottom of the page to export CSV files. Files are written to the desktop when available, otherwise to the application data directory under `Exports`.
 
 ### Updates
 
@@ -231,6 +237,53 @@ Maintainers can rebuild the bundled icon manifest from an existing local item ca
 ```bash
 scripts/generate-item-icon-manifest.sh ~/.local/share/TSM-CrossPlatform/ItemIcons TSM/Assets/item-icons.json.br
 ```
+
+### Build item data with Blizzard's API
+
+`TSM.ItemDatabaseBuilder` creates a resumable, flavor-aware JSONL item database from Blizzard's official Game Data API. Create an API client in the Battle.net developer portal, expose its credentials to the process, and provide a file containing the item IDs to fetch. Text and CSV inputs may contain one numeric ID per row or TSM item strings such as `i:19019`. JSON inputs may be arrays of IDs/item strings or objects with `id`, `itemId`, `item_id`, or `itemString` properties.
+
+```bash
+export BLIZZARD_CLIENT_ID="your-client-id"
+export BLIZZARD_CLIENT_SECRET="your-client-secret"
+
+dotnet run --project TSM.ItemDatabaseBuilder -- \
+  --ids item-ids.txt \
+  --region eu \
+  --all-active \
+  --output artifacts/item-data/items.jsonl \
+  --manifest TSM/Assets/item-icons.json.br
+```
+
+The built-in editions map Vanilla to `static-classic1x-{region}`, TBC Anniversary to `static-classicann-{region}`, MoP progression to `static-classic-{region}`, and Retail to `static-{region}`. Blizzard does not provide stable historical namespaces for Wrath or Cataclysm. If an archived or versioned snapshot namespace is available, add it explicitly with `--catalog wrath=EXACT_NAMESPACE` or `--catalog cataclysm=EXACT_NAMESPACE`. Reusing the current MoP progression namespace would return later revisions of older items rather than authentic Wrath or Cataclysm data.
+
+The builder stores both normalized fields and Blizzard's complete item/media responses. Runs resume from completed flavor/item pairs, honor API retry headers, and pause after throttling or transient server errors. Use `--refresh` to append refreshed records; readers should treat the final record for a flavor/item pair as authoritative. API namespaces change as Blizzard introduces clients and progression builds, so verify the current namespace in the Battle.net API documentation before producing a release database. Credentials are read only from environment variables and must never be committed or bundled with the desktop application.
+
+Item requests run concurrently with a shared request-rate limiter. Use `--concurrency` to control simultaneous item workers and `--requests-per-second` to cap the combined item and media request rate. Throttling responses pause and retry without discarding completed records.
+
+For a current flavor, the builder can enumerate item IDs directly from Blizzard's item-search endpoint instead of reusing an older expansion's ID list:
+
+```bash
+dotnet run --project TSM.ItemDatabaseBuilder -- \
+  --discover-ids \
+  --write-discovered-ids artifacts/item-data/mop-classic-item-ids.txt \
+  --edition mop \
+  --region eu \
+  --output artifacts/item-data/mop-classic.jsonl \
+  --concurrency 12 \
+  --requests-per-second 16
+```
+
+Discovery and item fetching are resumable through the JSONL output. Keeping the discovered ID file makes later database rebuilds reproducible even if Blizzard's search index changes.
+
+Convert one or more completed JSONL catalogs into the release SQLite database without API credentials:
+
+```bash
+dotnet run --project TSM.ItemDatabaseBuilder -- \
+  --import-jsonl artifacts/item-data/tbc-anniversary.jsonl \
+  --database TSM/Assets/items.db
+```
+
+Repeat `--import-jsonl` for each flavor when rebuilding the combined database. Queryable fields are stored as indexed SQLite columns. The larger structured preview payload is Brotli-compressed per item so opening one tooltip does not load the full catalog into memory.
 
 Pushing a version tag such as `v0.2.0` runs the release workflow and publishes a Windows x64 setup executable, a macOS Apple Silicon DMG, a Linux x64 AppImage, and portable ZIPs used by the automatic updater. Older temporary workflow artifacts are removed after a successful release; GitHub Release downloads are retained.
 

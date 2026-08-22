@@ -17,7 +17,7 @@ public sealed record ItemIconResult(
     IReadOnlyList<ItemTooltipLine> TooltipLines,
     AuctionItemClassification Classification);
 
-public sealed record ItemIconPreviewResult(string Path);
+public sealed record ItemIconPreviewResult(string Path, string Name, int Quality);
 
 public sealed record ItemTooltipLine(
     string Text,
@@ -39,6 +39,7 @@ public sealed partial class ItemIconService : IDisposable
     private readonly AppPaths _paths;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
+    private readonly ItemDatabaseService _itemDatabase;
     private readonly TimeSpan _tooltipRetryDelay;
     private readonly TimeSpan _iconRetryDelay;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _cacheLocks = new(StringComparer.Ordinal);
@@ -46,11 +47,13 @@ public sealed partial class ItemIconService : IDisposable
     private long _tooltipResumeUtcTicks;
     private long _iconResumeUtcTicks;
 
-    public ItemIconService(AppPaths paths, HttpClient? httpClient = null, TimeSpan? defaultRetryDelay = null)
+    public ItemIconService(AppPaths paths, HttpClient? httpClient = null, TimeSpan? defaultRetryDelay = null,
+        ItemDatabaseService? itemDatabase = null)
     {
         _paths = paths;
         _httpClient = httpClient ?? new HttpClient();
         _ownsClient = httpClient is null;
+        _itemDatabase = itemDatabase ?? new ItemDatabaseService();
         _tooltipRetryDelay = defaultRetryDelay ?? TimeSpan.FromSeconds(5);
         _iconRetryDelay = defaultRetryDelay ?? TimeSpan.FromMinutes(3);
         _bundledIconSlugs = new Lazy<IReadOnlyDictionary<string, Dictionary<string, string>>>(LoadBundledIconSlugs);
@@ -59,6 +62,9 @@ public sealed partial class ItemIconService : IDisposable
     }
 
     public event Action<DateTimeOffset, bool>? DownloadPaused;
+
+    public BundledItemSummary? GetBundledItemSummary(string itemString, string flavor) =>
+        _itemDatabase.GetSummary(itemString, flavor);
 
     public async Task<ItemIconResult?> GetAsync(string itemString, string flavor,
         CancellationToken cancellationToken = default)
@@ -90,14 +96,21 @@ public sealed partial class ItemIconService : IDisposable
             return null;
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
-        var cacheLock = _cacheLocks.GetOrAdd($"tooltip:{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
+        var cacheLock = _cacheLocks.GetOrAdd($"icon:{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
+            var summary = _itemDatabase.GetSummary(itemString, flavor);
             var icon = _bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons) &&
                        flavorIcons.TryGetValue(itemId, out var bundledIcon)
                 ? bundledIcon
-                : (await GetMetadataAsync(itemId, flavorKey, cancellationToken))?.Icon;
+                : summary?.IconSlug;
+            IconMetadata? metadata = null;
+            if (string.IsNullOrWhiteSpace(icon))
+            {
+                metadata = await GetMetadataAsync(itemId, flavorKey, cancellationToken);
+                icon = metadata?.Icon;
+            }
             if (string.IsNullOrWhiteSpace(icon) || !SafeIconName().IsMatch(icon))
                 return null;
             var cacheDirectory = Path.Combine(_paths.ItemIconDirectory, flavorKey);
@@ -105,7 +118,10 @@ public sealed partial class ItemIconService : IDisposable
             var iconPath = Path.Combine(cacheDirectory, $"{icon}.jpg");
             if (!File.Exists(iconPath))
                 await DownloadIconAsync(icon, iconPath, false, cancellationToken);
-            return File.Exists(iconPath) ? new ItemIconPreviewResult(iconPath) : null;
+            return File.Exists(iconPath)
+                ? new ItemIconPreviewResult(iconPath, summary?.Name ?? metadata?.Name ?? string.Empty,
+                    summary?.Quality ?? metadata?.Quality ?? -1)
+                : null;
         }
         finally
         {
@@ -121,9 +137,9 @@ public sealed partial class ItemIconService : IDisposable
             return false;
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
-        string? icon = null;
+        string? icon = _itemDatabase.GetSummary(itemString, flavor)?.IconSlug;
         if (_bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons))
-            flavorIcons.TryGetValue(itemId, out icon);
+            icon ??= flavorIcons.GetValueOrDefault(itemId);
         if (string.IsNullOrWhiteSpace(icon))
         {
             var metadataPath = Path.Combine(_paths.ItemIconDirectory, flavorKey, $"{itemId}.json");
@@ -154,6 +170,9 @@ public sealed partial class ItemIconService : IDisposable
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
+            var bundled = _itemDatabase.GetSummary(itemString, flavor);
+            if (bundled is not null)
+                return WowItemTaxonomy.Classify(bundled.Quality, bundled.ClassId, bundled.SubclassId);
             var metadata = await GetMetadataAsync(itemId, flavorKey, cancellationToken);
             return metadata is null ? null : Classify(metadata);
         }
@@ -185,6 +204,21 @@ public sealed partial class ItemIconService : IDisposable
         CancellationToken cancellationToken)
     {
         var cacheDirectory = Path.Combine(_paths.ItemIconDirectory, flavorKey);
+        var bundled = _itemDatabase.Get($"i:{itemId}", flavorKey);
+        if (bundled is not null && SafeIconName().IsMatch(bundled.IconSlug))
+        {
+            Directory.CreateDirectory(cacheDirectory);
+            var bundledIconPath = Path.Combine(cacheDirectory, $"{bundled.IconSlug}.jpg");
+            if (!File.Exists(bundledIconPath))
+                await DownloadIconAsync(bundled.IconSlug, bundledIconPath, true, cancellationToken);
+            if (File.Exists(bundledIconPath))
+            {
+                var bundledTooltip = ConvertBundledTooltip(bundled);
+                return new ItemIconResult(bundledIconPath, bundled.Quality, bundled.Name, bundledTooltip.Text,
+                    bundledTooltip.Lines, WowItemTaxonomy.Classify(bundled.Quality, bundled.ClassId,
+                        bundled.SubclassId));
+            }
+        }
         var metadata = await GetMetadataAsync(itemId, flavorKey, cancellationToken);
         if (metadata is null)
             return null;
@@ -266,19 +300,21 @@ public sealed partial class ItemIconService : IDisposable
         var temporaryPath = iconPath + $".{Guid.NewGuid():N}.tmp";
         try
         {
-            await using var target = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write,
-                FileShare.None, 81920, FileOptions.WriteThrough);
-            var buffer = new byte[81920];
-            var total = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+            await using (var target = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write,
+                             FileShare.None, 81920, FileOptions.WriteThrough))
             {
-                total += read;
-                if (total > MaximumIconBytes)
-                    return;
-                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                var buffer = new byte[81920];
+                var total = 0;
+                int read;
+                while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+                {
+                    total += read;
+                    if (total > MaximumIconBytes)
+                        return;
+                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                }
+                await target.FlushAsync(cancellationToken);
             }
-            await target.FlushAsync(cancellationToken);
             File.Move(temporaryPath, iconPath, true);
         }
         finally
@@ -518,6 +554,92 @@ public sealed partial class ItemIconService : IDisposable
         if (plainText.Length > 2000)
             plainText = plainText[..2000] + "…";
         return new ParsedTooltip(plainText, lines);
+    }
+
+    private static ParsedTooltip ConvertBundledTooltip(BundledItemData item)
+    {
+        var lines = new List<ItemTooltipLine>();
+        void Add(string? text, string color = "#E4E4E4")
+        {
+            if (!string.IsNullOrWhiteSpace(text) && !lines.Any(line => string.Equals(line.Text, text,
+                    StringComparison.OrdinalIgnoreCase)))
+                lines.Add(new ItemTooltipLine(text.Trim(), color, string.Empty, false, false,
+                    new AuctionMoneyParts(string.Empty, string.Empty, string.Empty, string.Empty)));
+        }
+        void AddDisplay(JsonElement element, string fallbackColor = "#E4E4E4")
+        {
+            if (element.ValueKind != JsonValueKind.Object ||
+                !element.TryGetProperty("display_string", out var display) ||
+                display.ValueKind != JsonValueKind.String)
+                return;
+            Add(display.GetString(), DisplayColor(element, fallbackColor));
+        }
+
+        Add($"Item Level {item.Level}", "#FFD36A");
+        try
+        {
+            using var document = JsonDocument.Parse(item.PreviewJson);
+            var preview = document.RootElement;
+            if (preview.TryGetProperty("binding", out var binding))
+                Add(JsonText(binding, "name"));
+            var type = string.Join(" · ", new[] { item.InventoryName, item.SubclassName }
+                .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase));
+            Add(type);
+            if (preview.TryGetProperty("armor", out var armor) && armor.TryGetProperty("display", out var armorDisplay))
+                AddDisplay(armorDisplay);
+            if (preview.TryGetProperty("shield_block", out var shield) &&
+                shield.TryGetProperty("display", out var shieldDisplay))
+                AddDisplay(shieldDisplay);
+            if (preview.TryGetProperty("weapon", out var weapon))
+            {
+                if (weapon.TryGetProperty("damage", out var damage))
+                    Add(JsonText(damage, "display_string"));
+                if (weapon.TryGetProperty("attack_speed", out var speed))
+                    Add(JsonText(speed, "display_string"));
+                if (weapon.TryGetProperty("dps", out var dps))
+                    Add(JsonText(dps, "display_string"));
+            }
+            if (preview.TryGetProperty("stats", out var stats) && stats.ValueKind == JsonValueKind.Array)
+            foreach (var stat in stats.EnumerateArray())
+            {
+                if (stat.TryGetProperty("display", out var display))
+                    AddDisplay(display, "#1EFF00");
+            }
+            if (preview.TryGetProperty("spells", out var spells) && spells.ValueKind == JsonValueKind.Array)
+            foreach (var spell in spells.EnumerateArray())
+                Add(JsonText(spell, "description"), "#1EFF00");
+            Add(JsonText(preview, "description"), "#FFD36A");
+            if (preview.TryGetProperty("requirements", out var requirements) &&
+                requirements.ValueKind == JsonValueKind.Object)
+            foreach (var requirement in requirements.EnumerateObject())
+                Add(JsonText(requirement.Value, "display_string"), "#F0A35B");
+            if (preview.TryGetProperty("durability", out var durability))
+                Add(JsonText(durability, "display_string"));
+        }
+        catch (JsonException)
+        {
+        }
+        if (item.SellPrice > 0)
+            lines.Add(new ItemTooltipLine("Sell Price:", "#E4E4E4", string.Empty, false, true,
+                AuctionMoneyParts.FromCopper(item.SellPrice)));
+        var text = string.Join('\n', lines.Select(line => line.IsMoney
+            ? $"{line.Text} {line.Money.Gold}{line.Money.Silver}{line.Money.Copper}".TrimEnd()
+            : line.Text));
+        return new ParsedTooltip(text, lines);
+    }
+
+    private static string JsonText(JsonElement element, string property) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) &&
+        value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
+
+    private static string DisplayColor(JsonElement display, string fallback)
+    {
+        if (!display.TryGetProperty("color", out var color) ||
+            !color.TryGetProperty("r", out var red) || !color.TryGetProperty("g", out var green) ||
+            !color.TryGetProperty("b", out var blue) || !red.TryGetInt32(out var r) ||
+            !green.TryGetInt32(out var g) || !blue.TryGetInt32(out var b))
+            return fallback;
+        return $"#{Math.Clamp(r, 0, 255):X2}{Math.Clamp(g, 0, 255):X2}{Math.Clamp(b, 0, 255):X2}";
     }
 
     private static AuctionMoneyParts? ParseMoney(string html)

@@ -11,14 +11,13 @@ public sealed class AppPaths
         DataDirectory = dataDirectory ?? Path.Combine(localData, "TSM-CrossPlatform");
         SettingsFile = Path.Combine(DataDirectory, "settings.json");
         AuctionPriceHistoryFile = Path.Combine(DataDirectory, "auction-price-history.json");
-        var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-        ExportDirectory = Directory.Exists(desktop) ? desktop : Path.Combine(DataDirectory, "Exports");
+        ErrorLogFile = Path.Combine(DataDirectory, "errors.log");
         ItemIconDirectory = Path.Combine(DataDirectory, "ItemIcons");
     }
 
     public string DataDirectory { get; }
     public string SettingsFile { get; }
     public string AuctionPriceHistoryFile { get; }
-    public string ExportDirectory { get; }
+    public string ErrorLogFile { get; }
     public string ItemIconDirectory { get; }
 }

@@ -162,6 +162,22 @@
 
           <StackPanel Grid.Row="1" Spacing="4">
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsAccountingSelected, Mode=OneWay}"
+                          Command="{Binding ShowAccountingCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="FileSpreadsheet" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Accounting" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsAuctionHouseSelected, Mode=OneWay}"
+                          Command="{Binding ShowAuctionHouseCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="Search" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Auction House" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsRealmDataSelected, Mode=OneWay}"
                           Command="{Binding ShowRealmDataCommand}">
               <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
@@ -175,22 +191,6 @@
               <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
                 <lucide:LucideIcon Kind="Package" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
                 <TextBlock Grid.Column="1" Text="Addons" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
-            </ToggleButton>
-            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
-                          IsChecked="{Binding IsAuctionHouseSelected, Mode=OneWay}"
-                          Command="{Binding ShowAuctionHouseCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="Search" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Auction House" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
-            </ToggleButton>
-            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
-                          IsChecked="{Binding IsAccountingSelected, Mode=OneWay}"
-                          Command="{Binding ShowAccountingCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="FileSpreadsheet" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Accounting export" VerticalAlignment="Center" FontWeight="Medium" />
               </Grid>
             </ToggleButton>
           </StackPanel>
@@ -281,8 +281,9 @@
           <Grid IsVisible="{Binding IsAuctionHouseSelected}" RowDefinitions="Auto,*">
             <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
                     Padding="12,8">
-              <Grid ColumnDefinitions="*,230,130,Auto,Auto" ColumnSpacing="10">
-                <Grid>
+              <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+                <Grid ColumnDefinitions="*,230,130,Auto,Auto,Auto" ColumnSpacing="10">
+                  <Grid>
                   <TextBox Text="{Binding AuctionSearchText}" PlaceholderText="Search item name or ID…"
                            Padding="10,0,38,0" />
                   <Button Classes="icon" Width="28" Height="28" Margin="0,0,3,0"
@@ -291,25 +292,51 @@
                           IsVisible="{Binding HasAuctionSearchText}" ToolTip.Tip="Clear search">
                     <lucide:LucideIcon Kind="X" Size="14" StrokeWidth="1.8" />
                   </Button>
-                </Grid>
-                <ComboBox Grid.Column="1" ItemsSource="{Binding AuctionRealmOptions}"
+                  </Grid>
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding AuctionRealmOptions}"
                           SelectedItem="{Binding SelectedAuctionRealm}" PlaceholderText="All realms"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
-                <ComboBox Grid.Column="2" ItemsSource="{Binding AuctionFactionOptions}"
+                  <ComboBox Grid.Column="2" ItemsSource="{Binding AuctionFactionOptions}"
                           SelectedItem="{Binding SelectedAuctionFaction}"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
-                <Button Grid.Column="3" Command="{Binding ToggleAuctionFavoritesFilterCommand}"
+                  <Button Grid.Column="3" Command="{Binding ToggleAdvancedAuctionFiltersCommand}"
+                          Padding="11,0" ToolTip.Tip="Filter by item details">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                      <lucide:LucideIcon Kind="SlidersHorizontal" Size="15" StrokeWidth="1.8"
+                                         VerticalAlignment="Center" Foreground="{Binding AdvancedAuctionFilterColor}" />
+                      <TextBlock Text="Filters" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="4" Command="{Binding ToggleAuctionFavoritesFilterCommand}"
                         Padding="11,0" ToolTip.Tip="Show only favorited items">
                   <StackPanel Orientation="Horizontal" Spacing="7">
                     <lucide:LucideIcon Kind="Star" Size="15" StrokeWidth="1.8" VerticalAlignment="Center"
                                        Foreground="{Binding AuctionFavoritesFilterColor}" />
                     <TextBlock Text="{Binding AuctionFavoritesLabel}" VerticalAlignment="Center" />
                   </StackPanel>
-                </Button>
-                <Button Grid.Column="4" Classes="icon" Command="{Binding RefreshAuctionIndexCommand}"
+                  </Button>
+                  <Button Grid.Column="5" Classes="icon" Command="{Binding RefreshAuctionIndexCommand}"
                         ToolTip.Tip="Rebuild local auction index">
                   <lucide:LucideIcon Kind="RefreshCw" Size="16" StrokeWidth="1.8" />
-                </Button>
+                  </Button>
+                </Grid>
+                <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*,Auto" ColumnSpacing="10"
+                      IsVisible="{Binding ShowAdvancedAuctionFilters}">
+                  <ComboBox ItemsSource="{Binding AuctionCategoryOptions}"
+                            SelectedItem="{Binding SelectedAuctionCategory}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding AuctionSubcategoryOptions}"
+                            SelectedItem="{Binding SelectedAuctionSubcategory}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  <ComboBox Grid.Column="2" ItemsSource="{Binding AuctionQualityOptions}"
+                            SelectedItem="{Binding SelectedAuctionQuality}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  <ComboBox Grid.Column="3" ItemsSource="{Binding AuctionInventoryTypeOptions}"
+                            SelectedItem="{Binding SelectedAuctionInventoryType}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
+                  <Button Grid.Column="4" Content="Clear" Command="{Binding ClearAdvancedAuctionFiltersCommand}"
+                          IsEnabled="{Binding HasAdvancedAuctionFilters}" Padding="14,0" />
+                </Grid>
               </Grid>
             </Border>
             <Grid x:Name="AuctionWorkspace" Grid.Row="1" SizeChanged="AuctionWorkspaceSizeChanged">
@@ -728,58 +755,130 @@
           </Grid>
 
           <Grid IsVisible="{Binding IsAccountingSelected}">
-            <Grid ColumnDefinitions="3*,2*" ColumnSpacing="0">
-              <Border Classes="card workspace" BorderThickness="0,0,1,0" Padding="20">
-                <StackPanel Spacing="16">
-                  <Grid ColumnDefinitions="*,*" ColumnSpacing="14">
-                    <StackPanel Spacing="7">
-                      <TextBlock Text="ACCOUNT" Classes="field-label" />
-                      <ComboBox PlaceholderText="Choose an account" ItemsSource="{Binding AccountingAccounts}"
-                                SelectedItem="{Binding SelectedAccount}">
-                        <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
-                      </ComboBox>
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Spacing="7">
-                      <TextBlock Text="REALM" Classes="field-label" />
-                      <ComboBox PlaceholderText="Choose a realm" ItemsSource="{Binding AccountingRealms}"
-                                SelectedItem="{Binding SelectedRealm}" />
-                    </StackPanel>
-                  </Grid>
-                  <Border Height="1" Background="{StaticResource BorderBrush}" />
-                  <StackPanel Spacing="10">
-                    <TextBlock Text="DATA TO INCLUDE" Classes="field-label" />
-                    <WrapPanel>
-                      <CheckBox Content="Sales" Margin="0,0,20,10" IsChecked="{Binding ExportSales}" />
-                      <CheckBox Content="Purchases" Margin="0,0,20,10" IsChecked="{Binding ExportPurchases}" />
-                      <CheckBox Content="Income" Margin="0,0,20,10" IsChecked="{Binding ExportIncome}" />
-                      <CheckBox Content="Expenses" Margin="0,0,20,10" IsChecked="{Binding ExportExpenses}" />
-                      <CheckBox Content="Expired auctions" Margin="0,0,20,10" IsChecked="{Binding ExportExpired}" />
-                      <CheckBox Content="Canceled auctions" Margin="0,0,20,10" IsChecked="{Binding ExportCanceled}" />
-                    </WrapPanel>
-                  </StackPanel>
-                  <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button Classes="primary" Content="Export CSV files" Command="{Binding ExportAccountingCommand}"
-                            IsEnabled="{Binding CanExportAccounting}" />
-                    <TextBlock Text="{Binding ExportStatus}" Classes="muted" FontSize="10"
-                               TextWrapping="Wrap" VerticalAlignment="Center" MaxWidth="420" />
-                  </StackPanel>
-                </StackPanel>
+            <Grid RowDefinitions="Auto,*">
+              <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
+                      BorderThickness="0,0,0,1" Padding="16,10">
+                <Grid ColumnDefinitions="1.4*,1.05*,1.05*,Auto,Auto" ColumnSpacing="10">
+                  <ComboBox PlaceholderText="Choose an account" ItemsSource="{Binding AccountingAccounts}"
+                            SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <ComboBox Grid.Column="1" PlaceholderText="Choose a realm" ItemsSource="{Binding AccountingRealms}"
+                            SelectedItem="{Binding SelectedRealm}" HorizontalAlignment="Stretch" />
+                  <ComboBox Grid.Column="2" ItemsSource="{Binding AccountingPlayers}"
+                            SelectedItem="{Binding SelectedAccountingPlayer}" HorizontalAlignment="Stretch" />
+                  <ComboBox Grid.Column="3" Width="78" ItemsSource="{Binding AccountingPeriods}"
+                            SelectedItem="{Binding SelectedAccountingPeriod}" />
+                  <Button Grid.Column="4" Classes="icon" Command="{Binding RefreshAccountingStatisticsCommand}"
+                          ToolTip.Tip="Reload local Accounting statistics">
+                    <lucide:LucideIcon Kind="RefreshCw" Size="15" StrokeWidth="1.8" />
+                  </Button>
+                </Grid>
               </Border>
-              <StackPanel Grid.Column="1" Spacing="16">
-                <Border Classes="card workspace" Padding="20">
-                  <StackPanel Spacing="10">
-                    <TextBlock Text="Export location" FontSize="13" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding ExportDirectory}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
-                  </StackPanel>
-                </Border>
-                <Border Classes="subtle-card" Padding="18">
-                  <StackPanel Spacing="8">
-                    <TextBlock Text="Safe local parsing" Foreground="#69C58F" FontWeight="SemiBold" FontSize="11" />
-                    <TextBlock Text="SavedVariables are parsed as data without executing Lua. Item names are resolved locally and CSV fields are safely escaped."
-                               Classes="muted" FontSize="10" TextWrapping="Wrap" />
-                  </StackPanel>
-                </Border>
-              </StackPanel>
+
+              <ScrollViewer Grid.Row="1">
+                <StackPanel>
+                  <Border Padding="18,16,18,14" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <StackPanel Spacing="12">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="Player gold" FontSize="15" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding AccountingStatisticsStatus}" Classes="muted" FontSize="9" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="Recorded character balances" Classes="muted"
+                                   FontSize="9" VerticalAlignment="Bottom" />
+                      </Grid>
+                      <Border Height="205" Background="#121212" BorderBrush="#2C2C2C" BorderThickness="1"
+                              CornerRadius="3" Padding="10">
+                        <controls:AccountingGoldChart Points="{Binding AccountingStatistics.GoldHistory}" />
+                      </Border>
+                      <Grid ColumnDefinitions="*,*,*,*,*,*">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="HIGH" Classes="field-label" />
+                          <TextBlock><Run Text="{Binding AccountingStatistics.HighBalanceParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.HighBalanceParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.HighBalanceParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.HighBalanceParts.Copper}" Foreground="#C77C43"/></TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="4">
+                          <TextBlock Text="LOW" Classes="field-label" />
+                          <TextBlock><Run Text="{Binding AccountingStatistics.LowBalanceParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.LowBalanceParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.LowBalanceParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.LowBalanceParts.Copper}" Foreground="#C77C43"/></TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                          <TextBlock Text="DAILY SALES" Classes="field-label" />
+                          <TextBlock Text="{Binding AccountingStatistics.DailySales}" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3" Spacing="4">
+                          <TextBlock Text="DAILY PURCHASES" Classes="field-label" />
+                          <TextBlock Text="{Binding AccountingStatistics.DailyPurchases}" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4" Spacing="4">
+                          <TextBlock Text="TOP SALE" Classes="field-label" />
+                          <TextBlock><Run Text="{Binding AccountingStatistics.TopSaleParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.TopSaleParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.TopSaleParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.TopSaleParts.Copper}" Foreground="#C77C43"/></TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="5" Spacing="4">
+                          <TextBlock Text="TOP PURCHASE" Classes="field-label" />
+                          <TextBlock><Run Text="{Binding AccountingStatistics.TopPurchaseParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.TopPurchaseParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.TopPurchaseParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.TopPurchaseParts.Copper}" Foreground="#C77C43"/></TextBlock>
+                        </StackPanel>
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+
+                  <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                  <Grid ColumnDefinitions="*,*,*">
+                    <Border Padding="18,15" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                      <StackPanel Spacing="9">
+                        <TextBlock Text="SALES" Classes="field-label" />
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Total gold earned"/><TextBlock Grid.Column="1"><Run Text="{Binding AccountingStatistics.TotalEarnedParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.TotalEarnedParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.TotalEarnedParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.TotalEarnedParts.Copper}" Foreground="#C77C43"/></TextBlock></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Average earned per day" Classes="muted"/><TextBlock Grid.Column="1"><Run Text="{Binding AccountingStatistics.AverageEarnedParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.AverageEarnedParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.AverageEarnedParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.AverageEarnedParts.Copper}" Foreground="#C77C43"/></TextBlock></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Top item" Classes="muted"/><TextBlock Grid.Column="1" Text="{Binding AccountingStatistics.TopEarnedItem}" Foreground="#69C58F" TextTrimming="CharacterEllipsis" MaxWidth="190"/></Grid>
+                      </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Padding="18,15" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                      <StackPanel Spacing="9">
+                        <TextBlock Text="EXPENSES" Classes="field-label" />
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Total gold spent"/><TextBlock Grid.Column="1"><Run Text="{Binding AccountingStatistics.TotalSpentParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.TotalSpentParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.TotalSpentParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.TotalSpentParts.Copper}" Foreground="#C77C43"/></TextBlock></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Average spent per day" Classes="muted"/><TextBlock Grid.Column="1"><Run Text="{Binding AccountingStatistics.AverageSpentParts.Empty}" Foreground="#737A81"/><Run Text="{Binding AccountingStatistics.AverageSpentParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding AccountingStatistics.AverageSpentParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding AccountingStatistics.AverageSpentParts.Copper}" Foreground="#C77C43"/></TextBlock></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Top item" Classes="muted"/><TextBlock Grid.Column="1" Text="{Binding AccountingStatistics.TopSpentItem}" Foreground="#4A9EFF" TextTrimming="CharacterEllipsis" MaxWidth="190"/></Grid>
+                      </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Padding="18,15">
+                      <StackPanel Spacing="9">
+                        <TextBlock Text="PROFIT" Classes="field-label" />
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Total profit"/><TextBlock Grid.Column="1" Foreground="{Binding AccountingStatistics.ProfitColor}" FontWeight="SemiBold"><Run Text="{Binding AccountingStatistics.ProfitSign}"/><Run Text="{Binding AccountingStatistics.TotalProfitParts.Empty}"/><Run Text="{Binding AccountingStatistics.TotalProfitParts.Gold}"/><Run Text="{Binding AccountingStatistics.TotalProfitParts.Silver}"/><Run Text="{Binding AccountingStatistics.TotalProfitParts.Copper}"/></TextBlock></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Average profit per day" Classes="muted"/><TextBlock Grid.Column="1" Foreground="{Binding AccountingStatistics.ProfitColor}"><Run Text="{Binding AccountingStatistics.AverageProfitSign}"/><Run Text="{Binding AccountingStatistics.AverageProfitParts.Empty}"/><Run Text="{Binding AccountingStatistics.AverageProfitParts.Gold}"/><Run Text="{Binding AccountingStatistics.AverageProfitParts.Silver}"/><Run Text="{Binding AccountingStatistics.AverageProfitParts.Copper}"/></TextBlock></Grid>
+                        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Top item" Classes="muted"/><TextBlock Grid.Column="1" Text="{Binding AccountingStatistics.TopProfitItem}" Foreground="#69C58F" TextTrimming="CharacterEllipsis" MaxWidth="190"/></Grid>
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                  </Border>
+
+                  <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <Grid RowDefinitions="38,Auto">
+                      <Border Background="#202020" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="18,0">
+                        <Grid ColumnDefinitions="2*,1*,1*,1*">
+                          <TextBlock Text="TOP ITEMS" Classes="field-label" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1" Text="EARNED" Classes="field-label" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="2" Text="SPENT" Classes="field-label" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="3" Text="PROFIT" Classes="field-label" VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+                      <ItemsControl Grid.Row="1" ItemsSource="{Binding AccountingStatistics.TopItems}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="18,9">
+                              <Grid ColumnDefinitions="2*,1*,1*,1*">
+                                <StackPanel Spacing="2"><TextBlock Text="{Binding ItemName}" FontWeight="SemiBold"/><TextBlock Text="{Binding ItemString}" Classes="muted" FontSize="9"/></StackPanel>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center"><Run Text="{Binding EarnedParts.Empty}" Foreground="#737A81"/><Run Text="{Binding EarnedParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding EarnedParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding EarnedParts.Copper}" Foreground="#C77C43"/></TextBlock>
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center"><Run Text="{Binding SpentParts.Empty}" Foreground="#737A81"/><Run Text="{Binding SpentParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding SpentParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding SpentParts.Copper}" Foreground="#C77C43"/></TextBlock>
+                                <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{Binding ProfitColor}"><Run Text="{Binding ProfitSign}"/><Run Text="{Binding ProfitParts.Empty}"/><Run Text="{Binding ProfitParts.Gold}"/><Run Text="{Binding ProfitParts.Silver}"/><Run Text="{Binding ProfitParts.Copper}"/></TextBlock>
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </Grid>
+                  </Border>
+
+                </StackPanel>
+              </ScrollViewer>
             </Grid>
           </Grid>
         </Grid>

@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TSM", "TSM\TSM.csproj", "{8
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TSM.Tests", "TSM.Tests\TSM.Tests.csproj", "{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TSM.ItemDatabaseBuilder", "TSM.ItemDatabaseBuilder\TSM.ItemDatabaseBuilder.csproj", "{815D1E1E-EF04-4E03-B276-3F12FB909A47}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{676697D7-E2C5-42FB-9D8D-8C95CB85E6E4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{815D1E1E-EF04-4E03-B276-3F12FB909A47}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{815D1E1E-EF04-4E03-B276-3F12FB909A47}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{815D1E1E-EF04-4E03-B276-3F12FB909A47}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{815D1E1E-EF04-4E03-B276-3F12FB909A47}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

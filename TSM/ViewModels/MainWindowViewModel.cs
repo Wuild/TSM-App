@@ -32,6 +32,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private readonly RealmDataService _realmDataService;
     private readonly AuctionHouseService _auctionHouseService;
     private readonly AuctionPriceHistoryStore _auctionPriceHistory;
+    private readonly ItemDatabaseService _itemDatabase;
     private readonly ItemIconService _itemIconService;
     private readonly ITsmApiClient _apiClient;
     private readonly AppDataSyncService _syncService;
@@ -42,6 +43,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private readonly GitHubUpdateService _appUpdates;
     private readonly DispatcherTimer _syncFreshnessTimer;
     private readonly DispatcherTimer _localDiscoveryTimer;
+    private readonly DispatcherTimer _accountingFileChangeTimer;
+    private readonly List<FileSystemWatcher> _accountingFileWatchers = [];
     private readonly Dictionary<string, string> _knownAddonVersions = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<WowInstallation> _installations = [];
     private bool _isLoggedIn;
@@ -56,17 +59,19 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _loginStatus = string.Empty;
     private string _headerText = "Sign in required";
     private string _statusDetail = "Connect a TradeSkillMaster account to continue";
-    private int _selectedTab;
-    private int _lastContentTab;
+    private int _selectedTab = 2;
+    private int _lastContentTab = 2;
     private TsmAccount? _selectedAccount;
     private string? _selectedRealm;
-    private bool _exportSales = true;
-    private bool _exportPurchases = true;
-    private bool _exportIncome;
-    private bool _exportExpenses;
-    private bool _exportExpired;
-    private bool _exportCanceled;
-    private string _exportStatus = "Select an account and realm to export local Accounting data.";
+    private AccountingStatistics _accountingStatistics = AccountingStatistics.Empty;
+    private string _selectedAccountingPlayer = "All players";
+    private AccountingPeriodOption _selectedAccountingPeriod;
+    private string _accountingStatisticsStatus = "Select an account and realm to view statistics.";
+    private CancellationTokenSource? _accountingStatisticsCancellation;
+    private Task? _accountingStatisticsRunner;
+    private bool _suppressAccountingRefresh;
+    private bool _accountingStatisticsDirty = true;
+    private string? _loadedAccountingStatisticsKey;
     private TsmRealmChoice? _selectedAvailableRealm;
     private ManagedRealmSelection? _selectedManagedRealm;
     private RealmStatusRow? _selectedRealmStatus;
@@ -83,6 +88,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _auctionSearchText = string.Empty;
     private string? _selectedAuctionRealm;
     private string _selectedAuctionFaction = "Both";
+    private bool _showAdvancedAuctionFilters;
+    private string _selectedAuctionCategory = "All categories";
+    private string _selectedAuctionSubcategory = "All subcategories";
+    private string _selectedAuctionQuality = "All qualities";
+    private string _selectedAuctionInventoryType = "All slots";
     private string _auctionResultSummary = "No auction data has been indexed yet.";
     private AuctionHouseItemViewModel? _selectedAuctionItem;
     private bool _isCheckingForUpdates;
@@ -119,6 +129,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         RealmDataService realmDataService,
         AuctionHouseService auctionHouseService,
         AuctionPriceHistoryStore auctionPriceHistory,
+        ItemDatabaseService itemDatabase,
         ItemIconService itemIconService,
         ITsmApiClient apiClient,
         AppDataSyncService syncService,
@@ -136,6 +147,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _realmDataService = realmDataService;
         _auctionHouseService = auctionHouseService;
         _auctionPriceHistory = auctionPriceHistory;
+        _itemDatabase = itemDatabase;
         _itemIconService = itemIconService;
         _itemIconService.DownloadPaused += ItemInfoDownloadPaused;
         _apiClient = apiClient;
@@ -146,12 +158,15 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _notifications = notifications;
         _appUpdates = appUpdates;
         Settings = settings;
+        _selectedAccountingPeriod = AccountingPeriods[^1];
         _syncFreshnessTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _syncFreshnessTimer.Tick += (_, _) => NotifySyncFreshnessChanged();
         _syncFreshnessTimer.Start();
         _localDiscoveryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _localDiscoveryTimer.Tick += DetectLocalChanges;
         _localDiscoveryTimer.Start();
+        _accountingFileChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _accountingFileChangeTimer.Tick += AccountingFilesChanged;
         if (Enum.TryParse<AuctionSortColumn>(settings.AuctionSortColumn, true, out var savedSortColumn) &&
             Enum.IsDefined(savedSortColumn))
             _auctionSortColumn = savedSortColumn;
@@ -171,7 +186,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         FindWowCommand = new DelegateCommand(FindWowPath);
         OnboardingBackCommand = new DelegateCommand(GoBackInOnboarding);
         OnboardingNextCommand = new DelegateCommand(ContinueOnboarding);
-        ExportAccountingCommand = new DelegateCommand(ExportAccounting, () => CanExportAccounting);
+        RefreshAccountingStatisticsCommand = new DelegateCommand(() => QueueAccountingStatistics(true));
         AddRealmCommand = new AsyncCommand(AddSelectedRealmAsync,
             () => !IsBusy && IsLoggedIn && SelectedAvailableRealm is not null);
         RemoveRealmCommand = new AsyncCommand(RemoveSelectedRealmAsync,
@@ -186,6 +201,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         ShowAuctionHouseCommand = new DelegateCommand(() => ShowContentPage(3));
         RefreshAuctionIndexCommand = new DelegateCommand(LoadAuctionIndex);
         ToggleAuctionFavoritesFilterCommand = new DelegateCommand(ToggleAuctionFavoritesFilter);
+        ToggleAdvancedAuctionFiltersCommand = new DelegateCommand(ToggleAdvancedAuctionFilters);
+        ClearAdvancedAuctionFiltersCommand = new DelegateCommand(ClearAdvancedAuctionFilters);
         ClearAuctionSearchCommand = new DelegateCommand(ClearAuctionSearch);
         SortAuctionItemCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.Item));
         SortAuctionMinBuyoutCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.MinBuyout));
@@ -216,11 +233,12 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         var backgroundSync = new BackgroundSyncScheduler(AutomaticSyncInterval);
         var syncService = new AppDataSyncService(apiClient, appDataParser,
             new AppDataFileWriter(appDataParser), accountingService);
+        var itemDatabase = new ItemDatabaseService();
         return new MainWindowViewModel(paths, settingsStore, wowService,
             accountingService,
             new RealmDataService(savedVariablesParser, appDataParser),
             new AuctionHouseService(appDataParser, savedVariablesParser), new AuctionPriceHistoryStore(paths),
-            new ItemIconService(paths), apiClient, syncService,
+            itemDatabase, new ItemIconService(paths, itemDatabase: itemDatabase), apiClient, syncService,
             credentialStore, backgroundSync, new StartupRegistrationService(),
             new DesktopNotificationService(), new GitHubUpdateService(), settings);
     }
@@ -230,8 +248,18 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public ObservableCollection<AddonStatusRow> AddonStatuses { get; } = [];
     public ObservableCollection<TsmAccount> AccountingAccounts { get; } = [];
     public ObservableCollection<string> AccountingRealms { get; } = [];
+    public ObservableCollection<string> AccountingPlayers { get; } = ["All players"];
+    public IReadOnlyList<AccountingPeriodOption> AccountingPeriods { get; } =
+    [
+        new("1D", 1), new("1W", 7), new("1M", 30), new("3M", 90), new("6M", 180),
+        new("1Y", 365), new("2Y", 730), new("All", null)
+    ];
     public ObservableCollection<TsmRealmChoice> AvailableRealms { get; } = [];
     public ObservableCollection<ManagedRealmSelection> ManagedRealms { get; } = [];
+    public ObservableCollection<string> AuctionSubcategoryOptions { get; } = ["All subcategories"];
+    public IReadOnlyList<string> AuctionCategoryOptions => WowItemTaxonomy.CategoryOptions;
+    public IReadOnlyList<string> AuctionQualityOptions => WowItemTaxonomy.QualityOptions;
+    public IReadOnlyList<string> AuctionInventoryTypeOptions => WowItemTaxonomy.InventoryTypeOptions;
     public IReadOnlyList<AuctionHouseItemViewModel> AuctionResults
     {
         get => _auctionResults;
@@ -263,6 +291,12 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             "https://github.com/ktsu-dev/RoundTripStringJsonConverter", "https://github.com/ktsu-dev/RoundTripStringJsonConverter/blob/main/LICENSE.md"),
         new("ktsu.Semantics.Strings", "2.5.4", "MIT", "Typed credential strings",
             "https://github.com/ktsu-dev/Semantics", "https://github.com/ktsu-dev/Semantics/blob/main/LICENSE.md"),
+        new("Microsoft.Data.Sqlite", "10.0.10", "MIT", "Managed access to the bundled item catalog",
+            "https://github.com/dotnet/efcore", "https://github.com/dotnet/efcore/blob/main/LICENSE.txt"),
+        new("SQLitePCLRaw", "3.0.4", "Apache 2.0", "Cross-platform native SQLite integration",
+            "https://github.com/ericsink/SQLitePCL.raw", "https://github.com/ericsink/SQLitePCL.raw/blob/master/LICENSE"),
+        new("SQLite", "3.53.3", "Public Domain", "Embedded item database engine",
+            "https://sqlite.org/", "https://sqlite.org/copyright.html"),
         new("SkiaSharp", "3.119.4", "MIT", "2D rendering used by Avalonia",
             "https://github.com/mono/SkiaSharp", "https://github.com/mono/SkiaSharp/blob/main/LICENSE.md"),
         new("HarfBuzzSharp", "8.3.1.3", "MIT", "Text shaping used by Avalonia",
@@ -278,7 +312,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         new("tsm-app-linux", "compatibility reference", "MIT", "Clean-room protocol validation reference",
             "https://github.com/exceptionptr/tsm-app-linux", "https://github.com/exceptionptr/tsm-app-linux/blob/main/LICENSE")
     ];
-    public string ExportDirectory => _paths.ExportDirectory;
     public string LastSyncText
     {
         get
@@ -451,6 +484,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             OnPropertyChanged(nameof(IsAuctionHouseSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
             OnPropertyChanged(nameof(CurrentPageTitle));
+            if (value == 2)
+                QueueAccountingStatistics();
             if (value == 3)
                 ResumeAuctionIconLoading();
             else
@@ -466,7 +501,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     {
         0 => "Realm data",
         1 => "Addons",
-        2 => "Accounting export",
+        2 => "Accounting",
         3 => "Auction House",
         _ => "TSM Desktop"
     };
@@ -477,8 +512,17 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (!SetProperty(ref _selectedAccount, value))
                 return;
-            LoadAccountingRealms();
-            UpdateExportState();
+            var wasSuppressed = _suppressAccountingRefresh;
+            _suppressAccountingRefresh = true;
+            try
+            {
+                LoadAccountingRealms();
+            }
+            finally
+            {
+                _suppressAccountingRefresh = wasSuppressed;
+            }
+            InvalidateAccountingStatistics();
         }
     }
 
@@ -488,17 +532,41 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         set
         {
             if (SetProperty(ref _selectedRealm, value))
-                UpdateExportState();
+            {
+                InvalidateAccountingStatistics();
+            }
         }
     }
 
-    public bool ExportSales { get => _exportSales; set { if (SetProperty(ref _exportSales, value)) UpdateExportState(); } }
-    public bool ExportPurchases { get => _exportPurchases; set { if (SetProperty(ref _exportPurchases, value)) UpdateExportState(); } }
-    public bool ExportIncome { get => _exportIncome; set { if (SetProperty(ref _exportIncome, value)) UpdateExportState(); } }
-    public bool ExportExpenses { get => _exportExpenses; set { if (SetProperty(ref _exportExpenses, value)) UpdateExportState(); } }
-    public bool ExportExpired { get => _exportExpired; set { if (SetProperty(ref _exportExpired, value)) UpdateExportState(); } }
-    public bool ExportCanceled { get => _exportCanceled; set { if (SetProperty(ref _exportCanceled, value)) UpdateExportState(); } }
-    public string ExportStatus { get => _exportStatus; private set => SetProperty(ref _exportStatus, value); }
+    public AccountingStatistics AccountingStatistics
+    {
+        get => _accountingStatistics;
+        private set => SetProperty(ref _accountingStatistics, value);
+    }
+    public string SelectedAccountingPlayer
+    {
+        get => _selectedAccountingPlayer;
+        set
+        {
+            if (SetProperty(ref _selectedAccountingPlayer, value ?? "All players"))
+                InvalidateAccountingStatistics();
+        }
+    }
+    public AccountingPeriodOption SelectedAccountingPeriod
+    {
+        get => _selectedAccountingPeriod;
+        set
+        {
+            if (value is not null && SetProperty(ref _selectedAccountingPeriod, value))
+                InvalidateAccountingStatistics();
+        }
+    }
+    public string AccountingStatisticsStatus
+    {
+        get => _accountingStatisticsStatus;
+        private set => SetProperty(ref _accountingStatisticsStatus, value);
+    }
+
     public string AuctionSearchText
     {
         get => _auctionSearchText;
@@ -527,6 +595,59 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetProperty(ref _selectedAuctionFaction, value))
                 QueueAuctionSearch();
+        }
+    }
+    public bool ShowAdvancedAuctionFilters
+    {
+        get => _showAdvancedAuctionFilters;
+        private set => SetProperty(ref _showAdvancedAuctionFilters, value);
+    }
+    public bool HasAdvancedAuctionFilters =>
+        !string.Equals(SelectedAuctionCategory, "All categories", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(SelectedAuctionSubcategory, "All subcategories", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(SelectedAuctionQuality, "All qualities", StringComparison.OrdinalIgnoreCase) ||
+        !string.Equals(SelectedAuctionInventoryType, "All slots", StringComparison.OrdinalIgnoreCase);
+    public string AdvancedAuctionFilterColor => HasAdvancedAuctionFilters ? "#F2A93B" : "#A5ABB1";
+    public string SelectedAuctionCategory
+    {
+        get => _selectedAuctionCategory;
+        set
+        {
+            if (!SetProperty(ref _selectedAuctionCategory, value ?? "All categories"))
+                return;
+            AuctionSubcategoryOptions.Clear();
+            foreach (var option in WowItemTaxonomy.SubcategoryOptions(_selectedAuctionCategory))
+                AuctionSubcategoryOptions.Add(option);
+            _selectedAuctionSubcategory = "All subcategories";
+            OnPropertyChanged(nameof(SelectedAuctionSubcategory));
+            AdvancedAuctionFilterChanged();
+        }
+    }
+    public string SelectedAuctionSubcategory
+    {
+        get => _selectedAuctionSubcategory;
+        set
+        {
+            if (SetProperty(ref _selectedAuctionSubcategory, value ?? "All subcategories"))
+                AdvancedAuctionFilterChanged();
+        }
+    }
+    public string SelectedAuctionQuality
+    {
+        get => _selectedAuctionQuality;
+        set
+        {
+            if (SetProperty(ref _selectedAuctionQuality, value ?? "All qualities"))
+                AdvancedAuctionFilterChanged();
+        }
+    }
+    public string SelectedAuctionInventoryType
+    {
+        get => _selectedAuctionInventoryType;
+        set
+        {
+            if (SetProperty(ref _selectedAuctionInventoryType, value ?? "All slots"))
+                AdvancedAuctionFilterChanged();
         }
     }
     public string AuctionResultSummary
@@ -649,9 +770,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         get => _addonManagementStatus;
         private set => SetProperty(ref _addonManagementStatus, value);
     }
-    public bool CanExportAccounting => SelectedAccount is not null && !string.IsNullOrWhiteSpace(SelectedRealm) &&
-                                       (ExportSales || ExportPurchases || ExportIncome || ExportExpenses || ExportExpired || ExportCanceled);
-
     public AsyncCommand LoginCommand { get; }
     public AsyncCommand LogoutCommand { get; }
     public AsyncCommand OpenSettingsCommand { get; }
@@ -660,7 +778,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public DelegateCommand FindWowCommand { get; }
     public DelegateCommand OnboardingBackCommand { get; }
     public DelegateCommand OnboardingNextCommand { get; }
-    public DelegateCommand ExportAccountingCommand { get; }
+    public DelegateCommand RefreshAccountingStatisticsCommand { get; }
     public DelegateCommand ShowRealmDataCommand { get; }
     public DelegateCommand ShowAddonVersionsCommand { get; }
     public AsyncCommand CheckAddonUpdatesCommand { get; }
@@ -668,6 +786,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public DelegateCommand ShowAuctionHouseCommand { get; }
     public DelegateCommand RefreshAuctionIndexCommand { get; }
     public DelegateCommand ToggleAuctionFavoritesFilterCommand { get; }
+    public DelegateCommand ToggleAdvancedAuctionFiltersCommand { get; }
+    public DelegateCommand ClearAdvancedAuctionFiltersCommand { get; }
     public DelegateCommand ClearAuctionSearchCommand { get; }
     public DelegateCommand SortAuctionItemCommand { get; }
     public DelegateCommand SortAuctionMinBuyoutCommand { get; }
@@ -1314,6 +1434,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _syncFreshnessTimer.Stop();
         _localDiscoveryTimer.Stop();
         _localDiscoveryTimer.Tick -= DetectLocalChanges;
+        _accountingFileChangeTimer.Stop();
+        _accountingFileChangeTimer.Tick -= AccountingFilesChanged;
+        DisposeAccountingFileWatchers();
         if (_auctionSearchCancellation is not null)
             await _auctionSearchCancellation.CancelAsync();
         if (_auctionIconCancellation is not null)
@@ -1322,6 +1445,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             await _activeTooltipCancellation.CancelAsync();
         if (_updateCheckCancellation is not null)
             await _updateCheckCancellation.CancelAsync();
+        if (_accountingStatisticsCancellation is not null)
+            await _accountingStatisticsCancellation.CancelAsync();
         if (_updateCheckRunner is not null)
         {
             try
@@ -1342,6 +1467,16 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             {
             }
         }
+        if (_accountingStatisticsRunner is not null)
+        {
+            try
+            {
+                await _accountingStatisticsRunner;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
         if (_activeTooltipRunner is not null)
         {
             try
@@ -1356,6 +1491,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _auctionIconCancellation?.Dispose();
         _activeTooltipCancellation?.Dispose();
         _auctionSearchCancellation?.Dispose();
+        _accountingStatisticsCancellation?.Dispose();
         foreach (var item in AuctionResults)
             item.Dispose();
         _itemIconService.DownloadPaused -= ItemInfoDownloadPaused;
@@ -1501,28 +1637,112 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    private void ExportAccounting()
+    private void InvalidateAccountingStatistics()
     {
-        if (SelectedAccount is null || string.IsNullOrWhiteSpace(SelectedRealm))
-            return;
+        _accountingStatisticsDirty = true;
+        if (!_suppressAccountingRefresh)
+            QueueAccountingStatistics();
+    }
 
+    private void QueueAccountingStatistics(bool force = false)
+    {
+        if (_suppressAccountingRefresh || !IsAccountingSelected)
+            return;
+        _accountingStatisticsCancellation?.Cancel();
+        _accountingStatisticsCancellation?.Dispose();
+        _accountingStatisticsCancellation = null;
+        if (SelectedAccount is null || string.IsNullOrWhiteSpace(SelectedRealm))
+        {
+            AccountingStatistics = AccountingStatistics.Empty;
+            AccountingStatisticsStatus = "Select an account and realm to view statistics.";
+            return;
+        }
+        var requestKey = string.Join('\n', SelectedAccount.SavedVariablesPath, SelectedRealm,
+            SelectedAccountingPlayer, SelectedAccountingPeriod.Days?.ToString() ?? "all");
+        if (!force && !_accountingStatisticsDirty &&
+            string.Equals(_loadedAccountingStatisticsKey, requestKey, StringComparison.Ordinal))
+            return;
+        _accountingStatisticsDirty = false;
+        var cancellation = new CancellationTokenSource();
+        _accountingStatisticsCancellation = cancellation;
+        AccountingStatisticsStatus = "Reading local Accounting history…";
+        _accountingStatisticsRunner = LoadAccountingStatisticsAsync(
+            SelectedAccount,
+            SelectedRealm,
+            SelectedAccountingPlayer == "All players" ? null : SelectedAccountingPlayer,
+            SelectedAccountingPeriod.Days,
+            requestKey,
+            cancellation);
+    }
+
+    private async Task LoadAccountingStatisticsAsync(TsmAccount account, string realm, string? player,
+        int? periodDays, string requestKey, CancellationTokenSource cancellation)
+    {
         try
         {
-            var options = new AccountingExportOptions(ExportSales, ExportPurchases, ExportIncome,
-                ExportExpenses, ExportExpired, ExportCanceled);
-            var result = _accountingService.Export(SelectedAccount, SelectedRealm, options, _paths.ExportDirectory);
-            var parts = new List<string>();
-            if (result.Files.Count > 0)
-                parts.Add($"Exported {result.Files.Count} file(s) to {_paths.ExportDirectory}.");
-            if (result.MissingCategories.Count > 0)
-                parts.Add($"No data: {string.Join(", ", result.MissingCategories)}.");
-            if (result.Errors.Count > 0)
-                parts.Add($"Errors: {string.Join("; ", result.Errors)}");
-            ExportStatus = parts.Count > 0 ? string.Join(" ", parts) : "No categories were selected.";
+            var statistics = await Task.Run(
+                () => _accountingService.BuildStatistics(account, realm, player, periodDays, cancellation.Token),
+                cancellation.Token);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (cancellation.IsCancellationRequested || !ReferenceEquals(_accountingStatisticsCancellation, cancellation))
+                    return;
+                AccountingStatistics = statistics;
+                var previousPlayer = SelectedAccountingPlayer;
+                var availablePlayers = new[] { "All players" }.Concat(statistics.Players).ToArray();
+                if (!AccountingPlayers.SequenceEqual(availablePlayers, StringComparer.OrdinalIgnoreCase))
+                {
+                    _suppressAccountingRefresh = true;
+                    try
+                    {
+                        AccountingPlayers.Clear();
+                        foreach (var availablePlayer in availablePlayers)
+                            AccountingPlayers.Add(availablePlayer);
+                        _selectedAccountingPlayer = availablePlayers.Contains(previousPlayer,
+                            StringComparer.OrdinalIgnoreCase) ? previousPlayer : "All players";
+                        OnPropertyChanged(nameof(SelectedAccountingPlayer));
+                    }
+                    finally
+                    {
+                        _suppressAccountingRefresh = false;
+                    }
+                }
+                _loadedAccountingStatisticsKey = requestKey;
+                if (!string.Equals(previousPlayer, SelectedAccountingPlayer, StringComparison.OrdinalIgnoreCase))
+                {
+                    InvalidateAccountingStatistics();
+                    return;
+                }
+                AccountingStatisticsStatus = statistics.FirstTransaction is not null
+                    ? statistics.DateRange
+                    : statistics.GoldHistory.Count > 0
+                        ? $"Recorded balances: {statistics.GoldHistory[0].Timestamp.ToLocalTime():d MMM yyyy} – {statistics.GoldHistory[^1].Timestamp.ToLocalTime():d MMM yyyy}"
+                        : "No Accounting transactions were found for this selection.";
+            });
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException)
+        catch (OperationCanceledException)
         {
-            ExportStatus = $"Export failed: {exception.Message}";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException or
+                                           FormatException or OverflowException)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!ReferenceEquals(_accountingStatisticsCancellation, cancellation))
+                    return;
+                AccountingStatistics = AccountingStatistics.Empty;
+                AccountingStatisticsStatus = $"Could not read Accounting history: {exception.Message}";
+            });
+            GlobalErrorService.Report(exception, "Accounting statistics");
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_accountingStatisticsCancellation, cancellation))
+                    _accountingStatisticsCancellation = null;
+                cancellation.Dispose();
+            });
         }
     }
 
@@ -1563,6 +1783,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void RefreshLocalData(bool refreshAuctionIndex = true)
     {
         _installations = _wowService.Discover(Settings.WowPath);
+        ConfigureAccountingFileWatchers();
         RealmStatuses.Clear();
         AddonStatuses.Clear();
 
@@ -1607,15 +1828,96 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         CheckAddonUpdatesCommand.RaiseCanExecuteChanged();
     }
 
+    private void ConfigureAccountingFileWatchers()
+    {
+        var roots = _installations.Select(installation => Path.GetFullPath(installation.RootPath))
+            .Where(Directory.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var watchedRoots = _accountingFileWatchers.Select(watcher => Path.GetFullPath(watcher.Path))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (roots.SequenceEqual(watchedRoots, StringComparer.OrdinalIgnoreCase))
+            return;
+        DisposeAccountingFileWatchers();
+        foreach (var root in roots)
+        {
+            try
+            {
+                var watcher = new FileSystemWatcher(root, "TradeSkillMaster.lua")
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size |
+                                   NotifyFilters.CreationTime
+                };
+                watcher.Changed += AccountingFileChanged;
+                watcher.Created += AccountingFileChanged;
+                watcher.Deleted += AccountingFileChanged;
+                watcher.Renamed += AccountingFileChanged;
+                watcher.EnableRaisingEvents = true;
+                _accountingFileWatchers.Add(watcher);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private void AccountingFileChanged(object sender, FileSystemEventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            _accountingFileChangeTimer.Stop();
+            _accountingFileChangeTimer.Start();
+        });
+    }
+
+    private void AccountingFilesChanged(object? sender, EventArgs e)
+    {
+        _accountingFileChangeTimer.Stop();
+        LoadAccountingAccounts();
+        LoadRealmDataStatuses();
+        InvalidateAccountingStatistics();
+        StatusDetail = "Local TradeSkillMaster account data updated";
+    }
+
+    private void DisposeAccountingFileWatchers()
+    {
+        foreach (var watcher in _accountingFileWatchers)
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Changed -= AccountingFileChanged;
+            watcher.Created -= AccountingFileChanged;
+            watcher.Deleted -= AccountingFileChanged;
+            watcher.Renamed -= AccountingFileChanged;
+            watcher.Dispose();
+        }
+        _accountingFileWatchers.Clear();
+    }
+
     private void LoadAccountingAccounts()
     {
         var previous = SelectedAccount?.DisplayName;
-        AccountingAccounts.Clear();
-        foreach (var account in _accountingService.FindAccounts(_installations))
-            AccountingAccounts.Add(account);
-        SelectedAccount = AccountingAccounts.FirstOrDefault(account => account.DisplayName == previous) ?? AccountingAccounts.FirstOrDefault();
+        var accounts = _accountingService.FindAccounts(_installations);
+        if (!AccountingAccounts.SequenceEqual(accounts))
+        {
+            _suppressAccountingRefresh = true;
+            try
+            {
+                AccountingAccounts.Clear();
+                foreach (var account in accounts)
+                    AccountingAccounts.Add(account);
+                SelectedAccount = AccountingAccounts.FirstOrDefault(account => account.DisplayName == previous) ??
+                                  AccountingAccounts.FirstOrDefault();
+            }
+            finally
+            {
+                _suppressAccountingRefresh = false;
+            }
+        }
         if (AccountingAccounts.Count == 0)
-            ExportStatus = "No TradeSkillMaster.lua account data was found.";
+            AccountingStatisticsStatus = "No TradeSkillMaster.lua account data was found.";
     }
 
     private void LoadAuctionIndex()
@@ -1659,6 +1961,29 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void ToggleAuctionFavoritesFilter()
     {
         ShowAuctionFavoritesOnly = !ShowAuctionFavoritesOnly;
+        QueueAuctionSearch();
+    }
+
+    private void ToggleAdvancedAuctionFilters()
+    {
+        ShowAdvancedAuctionFilters = !ShowAdvancedAuctionFilters;
+    }
+
+    private void ClearAdvancedAuctionFilters()
+    {
+        SetProperty(ref _selectedAuctionCategory, "All categories", nameof(SelectedAuctionCategory));
+        SetProperty(ref _selectedAuctionSubcategory, "All subcategories", nameof(SelectedAuctionSubcategory));
+        SetProperty(ref _selectedAuctionQuality, "All qualities", nameof(SelectedAuctionQuality));
+        SetProperty(ref _selectedAuctionInventoryType, "All slots", nameof(SelectedAuctionInventoryType));
+        AuctionSubcategoryOptions.Clear();
+        AuctionSubcategoryOptions.Add("All subcategories");
+        AdvancedAuctionFilterChanged();
+    }
+
+    private void AdvancedAuctionFilterChanged()
+    {
+        OnPropertyChanged(nameof(HasAdvancedAuctionFilters));
+        OnPropertyChanged(nameof(AdvancedAuctionFilterColor));
         QueueAuctionSearch();
     }
 
@@ -1725,17 +2050,23 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         var faction = SelectedAuctionFaction;
         var searchText = AuctionSearchText;
         var favoritesOnly = ShowAuctionFavoritesOnly;
+        var advancedFilter = new AdvancedAuctionFilter(
+            WowItemTaxonomy.QualityId(SelectedAuctionQuality),
+            WowItemTaxonomy.CategoryId(SelectedAuctionCategory),
+            WowItemTaxonomy.SubcategoryId(SelectedAuctionCategory, SelectedAuctionSubcategory),
+            WowItemTaxonomy.InventoryType(SelectedAuctionInventoryType));
         var favoriteKeys = new HashSet<string>(_auctionFavoriteKeys, StringComparer.OrdinalIgnoreCase);
         var sortColumn = _auctionSortColumn;
         var sortDescending = _auctionSortDescending;
         _auctionSearchRunner = RunAuctionSearchAsync(index, realm, faction, searchText,
-            favoritesOnly, favoriteKeys, sortColumn,
+            favoritesOnly, favoriteKeys, advancedFilter, sortColumn,
             sortDescending, debounce, cancellation);
     }
 
     private async Task RunAuctionSearchAsync(IReadOnlyList<AuctionHouseItemRow> index, string? realm,
         string faction, string searchText,
         bool favoritesOnly, IReadOnlySet<string> favoriteKeys,
+        AdvancedAuctionFilter advancedFilter,
         AuctionSortColumn sortColumn, bool sortDescending,
         bool debounce, CancellationTokenSource cancellation)
     {
@@ -1743,9 +2074,13 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (debounce)
                 await Task.Delay(140, cancellation.Token);
-            var result = await Task.Run(() => FilterAuctionResults(index, realm, faction, searchText,
-                favoritesOnly, favoriteKeys, sortColumn,
-                sortDescending, cancellation.Token),
+            var result = await Task.Run(() =>
+            {
+                var advancedItemKeys = BuildAdvancedAuctionItemKeys(index, advancedFilter, cancellation.Token);
+                return FilterAuctionResults(index, realm, faction, searchText,
+                    favoritesOnly, favoriteKeys, advancedItemKeys, sortColumn,
+                    sortDescending, cancellation.Token);
+            },
                 cancellation.Token);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -1767,6 +2102,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private static AuctionSearchResult FilterAuctionResults(IReadOnlyList<AuctionHouseItemRow> index,
         string? selectedRealm, string selectedFaction, string searchText,
         bool favoritesOnly, IReadOnlySet<string> favoriteKeys,
+        IReadOnlySet<string>? advancedItemKeys,
         AuctionSortColumn sortColumn, bool sortDescending, CancellationToken cancellationToken)
     {
         var filterRealm = !string.IsNullOrWhiteSpace(selectedRealm) &&
@@ -1792,6 +2128,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 continue;
             if (favoritesOnly && !favoriteKeys.Contains(ClassificationKey(item)))
                 continue;
+            if (advancedItemKeys is not null && !advancedItemKeys.Contains(ClassificationKey(item)))
+                continue;
             var key = (item.Flavor.ToUpperInvariant(), item.BaseItemString);
             if (!groups.TryGetValue(key, out var variants))
             {
@@ -1812,6 +2150,23 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         var sortedMatches = SortAuctionMatches(matches, sortColumn, sortDescending).ToArray();
         cancellationToken.ThrowIfCancellationRequested();
         return new AuctionSearchResult(sortedMatches, index.Count);
+    }
+
+    private IReadOnlySet<string>? BuildAdvancedAuctionItemKeys(IReadOnlyList<AuctionHouseItemRow> index,
+        AdvancedAuctionFilter filter, CancellationToken cancellationToken)
+    {
+        if (!filter.IsActive)
+            return null;
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var flavor in index.Select(item => item.Flavor).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var ids = _itemDatabase.QueryIds(new ItemDatabaseQuery(flavor, Quality: filter.Quality,
+                ClassId: filter.ClassId, SubclassId: filter.SubclassId, InventoryType: filter.InventoryType));
+            foreach (var id in ids)
+                keys.Add(ClassificationKey(flavor, $"i:{id}"));
+        }
+        return keys;
     }
 
     private void ToggleAuctionSort(AuctionSortColumn column)
@@ -1970,6 +2325,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         IReadOnlyList<AuctionHouseItemRow> Variants,
         bool IsFavorite);
     private sealed record AuctionSearchResult(IReadOnlyList<AuctionMatch> Rows, int TotalIndexed);
+    private sealed record AdvancedAuctionFilter(int? Quality, int? ClassId, int? SubclassId, string InventoryType)
+    {
+        public bool IsActive => Quality is not null || ClassId is not null || SubclassId is not null ||
+                                !string.IsNullOrWhiteSpace(InventoryType);
+    }
 
     private void CancelAuctionIconLoading()
     {
@@ -2088,7 +2448,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 failed = true;
                 return;
             }
-            var icon = await Task.Run(() => new Bitmap(result.Path), token);
+            var icon = await Task.Run(() => LoadBitmap(result.Path), token);
             try
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
@@ -2149,14 +2509,16 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             await _cachedAuctionIconSlots.WaitAsync(token);
             slotAcquired = true;
-            var icon = await Task.Run(() => new Bitmap(path), token);
+            var summary = await Task.Run(() =>
+                _itemIconService.GetBundledItemSummary(row.ItemString, row.Flavor), token);
+            var icon = await Task.Run(() => LoadBitmap(path), token);
             try
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (token.IsCancellationRequested || !AuctionResults.Contains(row))
                         return;
-                    row.SetPreviewIcon(icon);
+                    row.SetPreviewIcon(icon, summary);
                     icon = null;
                 });
             }
@@ -2205,14 +2567,14 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 outcome = 2;
                 return;
             }
-            var icon = await Task.Run(() => new Bitmap(result.Path), token);
+            var icon = await Task.Run(() => LoadBitmap(result.Path), token);
             try
             {
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (token.IsCancellationRequested || !AuctionResults.Contains(row))
                         return;
-                    row.SetPreviewIcon(icon);
+                    row.SetPreviewIcon(result, icon);
                     icon = null;
                     outcome = 1;
                 });
@@ -2257,6 +2619,16 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                     StartAuctionIconLoad(row);
             });
         }
+    }
+
+    private static Bitmap LoadBitmap(string path)
+    {
+        using var file = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
+        using var memory = new MemoryStream();
+        file.CopyTo(memory);
+        memory.Position = 0;
+        return new Bitmap(memory);
     }
 
     private void ItemInfoDownloadPaused(DateTimeOffset resumeAt, bool tooltip)
@@ -2390,26 +2762,25 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void LoadAccountingRealms()
     {
         var previous = SelectedRealm;
-        AccountingRealms.Clear();
+        IReadOnlyList<string> realms = [];
         if (SelectedAccount is not null)
         {
             try
             {
-                foreach (var realm in _accountingService.FindRealms(SelectedAccount))
-                    AccountingRealms.Add(realm);
+                realms = _accountingService.FindRealms(SelectedAccount);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException)
             {
-                ExportStatus = $"Could not read SavedVariables: {exception.Message}";
+                AccountingStatisticsStatus = $"Could not read SavedVariables: {exception.Message}";
             }
         }
-        SelectedRealm = AccountingRealms.FirstOrDefault(realm => realm == previous) ?? AccountingRealms.FirstOrDefault();
-    }
-
-    private void UpdateExportState()
-    {
-        OnPropertyChanged(nameof(CanExportAccounting));
-        ExportAccountingCommand.RaiseCanExecuteChanged();
+        if (AccountingRealms.SequenceEqual(realms, StringComparer.OrdinalIgnoreCase))
+            return;
+        AccountingRealms.Clear();
+        foreach (var realm in realms)
+            AccountingRealms.Add(realm);
+        SelectedRealm = AccountingRealms.FirstOrDefault(realm => realm == previous) ??
+                        AccountingRealms.FirstOrDefault();
     }
 
     private void ShowSyncNotifications(DataSyncResult result)

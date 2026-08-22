@@ -13,6 +13,9 @@ The application uses the following direct, transitive, build-time, and self-cont
 | ktsu.CredentialCache | 1.3.19 | MIT | Native credential storage |
 | ktsu.RoundTripStringJsonConverter | 1.0.18 | MIT | Credential serialization |
 | ktsu.Semantics.Strings | 2.5.4 | MIT | Typed credential values |
+| Microsoft.Data.Sqlite | 10.0.10 | MIT | Managed SQLite access |
+| SQLitePCLRaw | 3.0.4 | Apache 2.0 | Native SQLite integration |
+| SQLite | 3.53.3 | Public Domain | Embedded item database engine |
 | SkiaSharp and native assets | 3.119.4 | MIT | 2D rendering |
 | HarfBuzzSharp and native assets | 8.3.1.3 | MIT | Text shaping |
 | MicroCom.Runtime | 0.11.6 | MIT | Native interoperability |
@@ -33,6 +36,10 @@ The Inter typeface is distributed under the SIL Open Font License 1.1. See <http
 
 Lucide icon artwork is distributed under the ISC License. See <https://github.com/lucide-icons/lucide/blob/main/LICENSE>.
 
+SQLitePCLRaw is distributed under the Apache License 2.0. See <https://github.com/ericsink/SQLitePCL.raw/blob/master/LICENSE>.
+
+SQLite has been dedicated to the public domain. See <https://sqlite.org/copyright.html>.
+
 ## MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
@@ -43,10 +50,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## Wowhead item data
 
-The optional Auction House enrichment feature retrieves item tooltip metadata from
-Wowhead and item artwork from its `wow.zamimg.com` CDN. These responses are cached
-locally by World of Warcraft flavor. Wowhead and its item data are properties of
-their respective owners; this project is not affiliated with or endorsed by Wowhead.
+The optional Auction House fallback retrieves item tooltip metadata from Wowhead.
+Item artwork is retrieved from Blizzard's World of Warcraft media CDN. These responses
+are cached locally by World of Warcraft flavor. Wowhead and its item data are properties
+of their respective owners; this project is not affiliated with or endorsed by Wowhead.
 The Wowhead button uses the official 48px Wowhead mark downloaded from
 `https://wow.zamimg.com/images/logos/favicon-live.png`.
 

@@ -43,7 +43,7 @@ public sealed partial class WowInstallationService
             {
                 var savedVariables = Path.Combine(directory, "SavedVariables", "TradeSkillMaster.lua");
                 return File.Exists(savedVariables) ? savedVariables : null;
-            });
+            }, false);
             AddDirectoryEntries(parts, installation.AddOnsPath, "addon", directory =>
             {
                 var name = Path.GetFileName(directory);
@@ -148,7 +148,8 @@ public sealed partial class WowInstallationService
         ICollection<string> parts,
         string parent,
         string prefix,
-        Func<string, string?> trackedFile)
+        Func<string, string?> trackedFile,
+        bool includeFileMetadata = true)
     {
         if (!Directory.Exists(parent))
             return;
@@ -169,7 +170,9 @@ public sealed partial class WowInstallationService
             if (file is null)
                 continue;
             var info = new FileInfo(file);
-            parts.Add($"{prefix}:{Path.GetFileName(directory)}:{info.Length}:{info.LastWriteTimeUtc.Ticks}");
+            parts.Add(includeFileMetadata
+                ? $"{prefix}:{Path.GetFileName(directory)}:{info.Length}:{info.LastWriteTimeUtc.Ticks}"
+                : $"{prefix}:{Path.GetFileName(directory)}:{Path.GetFullPath(file)}");
         }
     }
 

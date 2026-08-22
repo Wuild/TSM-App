@@ -10,7 +10,7 @@ var tests = new (string Name, Func<Task> Execute)[]
 {
     ("parses SavedVariables data without executing Lua", Run(ParseSavedVariables)),
     ("rejects executable Lua expressions", Run(RejectExecutableLua)),
-    ("discovers realms and exports Accounting CSV", Run(ExportAccounting)),
+    ("discovers realms and reads Accounting statistics", Run(ReadAccountingStatistics)),
     ("indexes AppData metadata and derives local realm status", Run(IndexAppData)),
     ("persists onboarding and manually managed realm settings", Run(PersistManagedRealms)),
     ("restores application settings to their defaults", Run(ResetApplicationSettings)),
@@ -20,12 +20,13 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("authenticates and differentially syncs AppData atomically", AuthenticateAndSyncAppData),
     ("syncs faction-qualified anniversary realm data", SyncFactionQualifiedRealm),
     ("discovers PTR client variants", Run(DiscoverPtrVariants)),
-    ("detects newly installed clients and changed local realm data", Run(DetectLocalInstallationChanges)),
+    ("detects newly installed clients and local accounts", Run(DetectLocalInstallationChanges)),
     ("safely updates, reinstalls, and removes addons", UpdateInstalledAddon),
     ("runs automatic sync callbacks serially on a 30 minute cadence", AutomaticSyncCadence),
     ("selects the native GitHub update package", SelectNativeUpdatePackage),
     ("decodes and indexes local AuctionDB prices", Run(IndexAuctionHouseSnapshot)),
     ("persists favorite item price history without duplicate snapshots", Run(PersistAuctionPriceHistory)),
+    ("queries the bundled SQLite item catalog", Run(QueryBundledItemDatabase)),
     ("caches Wowhead item details and icons by flavor", CacheWowheadItemDetails),
     ("backs off and retries throttled item detail downloads", RetryThrottledItemDetails),
     ("maps Wowhead item categories and dependent subcategories", Run(MapWowheadItemTaxonomy)),
@@ -109,13 +110,12 @@ static void ResetApplicationSettings()
         "one or more application preferences survived a full reset");
 }
 
-static void ExportAccounting()
+static void ReadAccountingStatistics()
 {
     var temporaryRoot = Path.Combine(Path.GetTempPath(), $"tsm-parser-tests-{Guid.NewGuid():N}");
     var accountRoot = Path.Combine(temporaryRoot, "_retail_", "WTF", "Account", "ACCOUNT#1");
     var savedVariables = Path.Combine(accountRoot, "SavedVariables");
     var addons = Path.Combine(temporaryRoot, "_retail_", "Interface", "AddOns");
-    var exports = Path.Combine(temporaryRoot, "exports");
     Directory.CreateDirectory(savedVariables);
     Directory.CreateDirectory(addons);
     var sourcePath = Path.Combine(savedVariables, "TradeSkillMaster.lua");
@@ -129,13 +129,14 @@ static void ExportAccounting()
         var account = service.FindAccounts([installation]).Single();
         Assert(service.FindRealms(account).SequenceEqual(["Draenor"]), "realm discovery failed");
 
-        var result = service.Export(account, "Draenor",
-            new AccountingExportOptions(true, false, false, false, false, false), exports);
-        Assert(result.Errors.Count == 0, "export returned errors");
-        Assert(result.Files.Count == 1, "sales export file missing");
-        var csv = File.ReadAllText(result.Files[0]);
-        Assert(csv.Contains("itemString,itemName,price", StringComparison.Ordinal), "itemName column missing");
-        Assert(csv.Contains("i:123,\"Copper, Bar\",5000", StringComparison.Ordinal), "item name lookup or CSV escaping failed");
+        var statistics = service.BuildStatistics(account, "Draenor", null, null);
+        Assert(statistics.Players.SequenceEqual(["Test"]), "Accounting player discovery failed");
+        Assert(statistics.TotalEarned == 5000, "sale total did not use per-item price and quantity");
+        Assert(statistics.TotalSpent == 0 && statistics.TotalProfit == 5000, "Accounting totals were incorrect");
+        Assert(statistics.TopItems.Single().SoldQuantity == 1, "sale quantity was incorrect");
+        Assert(statistics.TopEarnedItem == "Copper, Bar", "top sale item lookup failed");
+        Assert(statistics.GoldHistory.Count == 2 && statistics.GoldHistory[^1].BalanceCopper == 25000,
+            "recorded player gold history was not loaded");
     }
     finally
     {
@@ -295,19 +296,46 @@ static async Task CacheWowheadItemDetails()
         Assert(handler.Requests.Count == 5 && handler.Requests[3].AbsolutePath == "/tooltip/item/19019",
             "Retail did not use its own Wowhead endpoint and cache namespace");
 
-        var anniversary = await service.GetAsync("i:23446", "Anniversary");
+        var anniversary = await service.GetAsync("i:30038", "Anniversary");
         Assert(anniversary is not null &&
                anniversary.Path.Contains(Path.Combine("ItemIcons", "tbc"), StringComparison.Ordinal),
             "Anniversary item cache did not use its TBC namespace");
-        Assert(handler.Requests.Count == 7 &&
-               handler.Requests[5].AbsolutePath == "/tbc/tooltip/item/23446",
-            "Anniversary item did not use the Wowhead TBC endpoint");
+        Assert(handler.Requests.Count == 6 && handler.Requests[5].Host == "render.worldofwarcraft.com" &&
+               anniversary!.Name == "Belt of Blasting" && anniversary.Quality == 4 &&
+               anniversary.TooltipLines.Any(line => line.Text.Contains("spell hit rating by 23",
+                   StringComparison.OrdinalIgnoreCase)) &&
+               anniversary.TooltipLines.Any(line => line.IsMoney && line.Money.Gold == "2g " &&
+                                                     line.Money.Silver == "68s " &&
+                                                     line.Money.Copper == "81c"),
+            "Anniversary item did not use the bundled database before downloading its icon");
     }
     finally
     {
         if (Directory.Exists(temporaryRoot))
             Directory.Delete(temporaryRoot, true);
     }
+}
+
+static void QueryBundledItemDatabase()
+{
+    var service = new ItemDatabaseService();
+    Assert(service.IsAvailable, "bundled SQLite item database was not copied to the application output");
+    var belt = service.Get("i:30038", "Anniversary");
+    Assert(belt is
+        {
+            Name: "Belt of Blasting", Quality: 4, Level: 128, RequiredLevel: 70,
+            ClassName: "Armor", SubclassName: "Cloth", InventoryName: "Waist", SellPrice: 26881
+        }, "bundled TBC item fields were incomplete");
+    Assert(belt!.PreviewJson.Contains("Improves spell hit rating by 23", StringComparison.Ordinal),
+        "compressed Blizzard preview data did not round-trip");
+    var results = service.Query(new ItemDatabaseQuery("Anniversary", "Belt of Blasting", 4, 4, 1, "WAIST", 10));
+    Assert(results.Count == 1 && results[0].Id == 30038,
+        "indexed SQLite category, quality, slot, and name query failed");
+    var filteredIds = service.QueryIds(new ItemDatabaseQuery("Anniversary", Quality: 4, ClassId: 4,
+        SubclassId: 1, InventoryType: "WAIST"));
+    Assert(filteredIds.Contains(30038), "lightweight advanced-search ID query omitted a matching item");
+    Assert(service.Get("i:5108", "Anniversary") is null,
+        "unavailable Blizzard item was returned as usable catalog data");
 }
 
 static async Task RetryThrottledItemDetails()
@@ -475,7 +503,8 @@ static void DetectLocalInstallationChanges()
 
         File.AppendAllText(savedVariables, "\nNewRealmMarker = true");
         var withRealmChange = service.GetDiscoveryFingerprint(temporaryRoot);
-        Assert(withRealmChange != withAccount, "changed local realm data were not detected");
+        Assert(withRealmChange == withAccount,
+            "SavedVariables content changes incorrectly triggered a full client rediscovery");
     }
     finally
     {
@@ -818,7 +847,8 @@ static string SavedVariablesFixture() =>
         },
         ["enabled"] = true,
         ["unused"] = nil,
-        ["r@Draenor@internalData@csvSales"] = "itemString,price,stackSize,quantity,time,source\ni:123,5000,2,1,1700000000,Auction",
+        ["r@Draenor@internalData@csvSales"] = "itemString,price,stackSize,quantity,player,time,source\ni:123,5000,2,1,Test,1700000000,Auction",
+        ["s@Test - Alliance - Draenor@internalData@goldLog"] = "minute,copper\n28333333,10000\n28334773,25000",
     }
     TSMItemInfoDB = {
         ["names"] = "Copper, Bar\002",

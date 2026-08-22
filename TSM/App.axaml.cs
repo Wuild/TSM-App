@@ -27,6 +27,7 @@ public sealed partial class App : Application
             window.RestoreSavedWindowPlacement(viewModel.Settings);
             _viewModel = viewModel;
             _mainWindow = window;
+            GlobalErrorService.SetWindowProvider(() => _mainWindow);
             desktop.MainWindow = window;
             viewModel.Settings.PropertyChanged += (_, args) =>
             {

@@ -47,6 +47,22 @@ public static class WowItemTaxonomy
     public static IReadOnlyList<string> QualityOptions { get; } =
         ["All qualities", "Poor", "Common", "Uncommon", "Rare", "Epic", "Legendary", "Artifact", "Heirloom"];
 
+    private static readonly IReadOnlyDictionary<string, string> InventoryTypes =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Ammo"] = "AMMO", ["Back"] = "CLOAK", ["Bag"] = "BAG", ["Chest"] = "CHEST|ROBE",
+            ["Feet"] = "FEET", ["Finger"] = "FINGER", ["Hands"] = "HAND", ["Head"] = "HEAD",
+            ["Held in off-hand"] = "HOLDABLE", ["Legs"] = "LEGS", ["Main hand"] = "WEAPONMAINHAND",
+            ["Neck"] = "NECK", ["Off hand"] = "WEAPONOFFHAND", ["One-hand"] = "WEAPON",
+            ["Ranged"] = "RANGED|RANGEDRIGHT", ["Relic"] = "RELIC", ["Shield"] = "SHIELD",
+            ["Shirt"] = "BODY", ["Shoulder"] = "SHOULDER", ["Tabard"] = "TABARD",
+            ["Thrown"] = "THROWN", ["Trinket"] = "TRINKET", ["Two-hand"] = "TWOHWEAPON",
+            ["Waist"] = "WAIST", ["Wrist"] = "WRIST"
+        };
+
+    public static IReadOnlyList<string> InventoryTypeOptions { get; } =
+        ["All slots", .. InventoryTypes.Keys.Order(StringComparer.OrdinalIgnoreCase)];
+
     public static AuctionItemClassification Classify(int quality, int classId, int subclassId)
     {
         var category = Categories.GetValueOrDefault(classId, $"Category {classId}");
@@ -66,6 +82,29 @@ public static class WowItemTaxonomy
             ? ["All subcategories", .. values.Values.Distinct(StringComparer.OrdinalIgnoreCase)]
             : ["All subcategories"];
     }
+
+    public static int? CategoryId(string category) => Categories
+        .Where(pair => string.Equals(pair.Value, category, StringComparison.OrdinalIgnoreCase))
+        .Select(pair => (int?)pair.Key).FirstOrDefault();
+
+    public static int? SubcategoryId(string category, string subcategory)
+    {
+        var classId = CategoryId(category);
+        return classId is { } value && Subcategories.TryGetValue(value, out var subcategories)
+            ? subcategories.Where(pair => string.Equals(pair.Value, subcategory, StringComparison.OrdinalIgnoreCase))
+                .Select(pair => (int?)pair.Key).FirstOrDefault()
+            : null;
+    }
+
+    public static int? QualityId(string quality)
+    {
+        var index = QualityOptions.Select((value, position) => (value, position))
+            .Where(option => string.Equals(option.value, quality, StringComparison.OrdinalIgnoreCase))
+            .Select(option => option.position).DefaultIfEmpty(-1).First();
+        return index > 0 ? index - 1 : null;
+    }
+
+    public static string InventoryType(string slot) => InventoryTypes.GetValueOrDefault(slot, string.Empty);
 
     private static string QualityName(int quality) => quality switch
     {

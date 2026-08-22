@@ -164,7 +164,8 @@ public sealed class GitHubUpdateService : IDisposable
             var startInfo = new ProcessStartInfo("powershell.exe")
             {
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                WorkingDirectory = temporaryRoot
             };
             startInfo.ArgumentList.Add("-NoProfile");
             startInfo.ArgumentList.Add("-NonInteractive");
@@ -180,6 +181,8 @@ public sealed class GitHubUpdateService : IDisposable
             startInfo.ArgumentList.Add(targetDirectory.TrimEnd(Path.DirectorySeparatorChar));
             startInfo.ArgumentList.Add("-TemporaryRoot");
             startInfo.ArgumentList.Add(temporaryRoot);
+            startInfo.ArgumentList.Add("-LogPath");
+            startInfo.ArgumentList.Add(WindowsUpdateLogPath());
             _ = Process.Start(startInfo) ??
                 throw new InvalidOperationException("The Windows update helper could not be started.");
         }
@@ -371,6 +374,14 @@ public sealed class GitHubUpdateService : IDisposable
         }
     }
 
+    private static string WindowsUpdateLogPath()
+    {
+        var localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localData))
+            localData = Path.GetTempPath();
+        return Path.Combine(localData, "TSM-CrossPlatform", "windows-update.log");
+    }
+
     private static Version ParseVersion(string value)
     {
         value = value.Trim().TrimStart('v', 'V');
@@ -389,27 +400,73 @@ public sealed class GitHubUpdateService : IDisposable
           [Parameter(Mandatory=$true)][int]$ProcessId,
           [Parameter(Mandatory=$true)][string]$SourceDirectory,
           [Parameter(Mandatory=$true)][string]$TargetDirectory,
-          [Parameter(Mandatory=$true)][string]$TemporaryRoot
+          [Parameter(Mandatory=$true)][string]$TemporaryRoot,
+          [Parameter(Mandatory=$true)][string]$LogPath
         )
         $ErrorActionPreference = 'Stop'
+        function Write-UpdateLog([string]$Message) {
+          $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+          Add-Content -LiteralPath $LogPath -Value "[$timestamp] $Message"
+        }
+        function Invoke-WithRetry([scriptblock]$Operation, [string]$Description) {
+          $lastError = $null
+          for ($attempt = 1; $attempt -le 40; $attempt++) {
+            try {
+              & $Operation
+              return
+            } catch {
+              $lastError = $_
+              Start-Sleep -Milliseconds 250
+            }
+          }
+          throw "$Description failed after 10 seconds: $lastError"
+        }
+        $logDirectory = Split-Path -Parent $LogPath
+        New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
+        Set-Content -LiteralPath $LogPath -Value "TSM Windows update started."
+        Set-Location -LiteralPath $TemporaryRoot
+        Write-UpdateLog "Waiting for process $ProcessId to exit."
         Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue
         $backup = "$TargetDirectory.update-backup"
         try {
-          if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
-          Move-Item -LiteralPath $TargetDirectory -Destination $backup
+          if (Test-Path -LiteralPath $backup) {
+            Invoke-WithRetry { Remove-Item -LiteralPath $backup -Recurse -Force } 'Removing previous backup'
+          }
+          Invoke-WithRetry { Move-Item -LiteralPath $TargetDirectory -Destination $backup } 'Backing up installation'
           try {
-            Move-Item -LiteralPath $SourceDirectory -Destination $TargetDirectory
+            Invoke-WithRetry { Move-Item -LiteralPath $SourceDirectory -Destination $TargetDirectory } 'Installing update'
+            if (-not (Test-Path -LiteralPath (Join-Path $TargetDirectory 'TSM.exe'))) {
+              throw 'The installed update does not contain TSM.exe.'
+            }
+            Write-UpdateLog 'Update installed successfully. Starting the new application.'
+            try {
+              Invoke-WithRetry { Remove-Item -LiteralPath $backup -Recurse -Force } 'Removing backup'
+            } catch {
+              Write-UpdateLog "The update succeeded but backup cleanup failed: $_"
+            }
             Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe')
-            Remove-Item -LiteralPath $backup -Recurse -Force
           } catch {
-            if (Test-Path -LiteralPath $TargetDirectory) { Remove-Item -LiteralPath $TargetDirectory -Recurse -Force }
-            Move-Item -LiteralPath $backup -Destination $TargetDirectory
-            Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe')
+            Write-UpdateLog "Installation failed: $_"
+            if (Test-Path -LiteralPath $TargetDirectory) {
+              Invoke-WithRetry { Remove-Item -LiteralPath $TargetDirectory -Recurse -Force } 'Removing failed update'
+            }
+            Invoke-WithRetry { Move-Item -LiteralPath $backup -Destination $TargetDirectory } 'Restoring backup'
             throw
+          }
+        } catch {
+          Write-UpdateLog "Update failed: $_"
+          if ((Test-Path -LiteralPath $backup) -and -not (Test-Path -LiteralPath $TargetDirectory)) {
+            try { Move-Item -LiteralPath $backup -Destination $TargetDirectory } catch { Write-UpdateLog "Rollback failed: $_" }
+          }
+          if (Test-Path -LiteralPath (Join-Path $TargetDirectory 'TSM.exe')) {
+            Start-Process -FilePath (Join-Path $TargetDirectory 'TSM.exe')
           }
         } finally {
           Start-Sleep -Milliseconds 500
-          if (Test-Path -LiteralPath $TemporaryRoot) { Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force }
+          Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
+          if (Test-Path -LiteralPath $TemporaryRoot) {
+            try { Remove-Item -LiteralPath $TemporaryRoot -Recurse -Force } catch { Write-UpdateLog "Cleanup failed: $_" }
+          }
         }
         """;
 

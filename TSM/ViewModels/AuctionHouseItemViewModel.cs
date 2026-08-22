@@ -165,28 +165,49 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
         _hasItemDetails = true;
         if (result.TooltipLines.Count > 0)
             _itemDetails = result.TooltipLines;
-        QualityColor = result.Quality switch
-        {
-            0 => "#9D9D9D",
-            1 => "#FFFFFF",
-            2 => "#1EFF00",
-            3 => "#0070DD",
-            4 => "#A335EE",
-            5 => "#FF8000",
-            6 => "#E6CC80",
-            7 => "#00CCFF",
-            _ => "#52575C"
-        };
+        QualityColor = QualityColorFor(result.Quality);
         OnPropertyChanged(nameof(ItemDetails));
         OnPropertyChanged(nameof(TooltipText));
         OnPropertyChanged(nameof(HasItemDetails));
     }
 
-    public void SetPreviewIcon(Bitmap icon)
+    public void SetPreviewIcon(Bitmap icon, BundledItemSummary? item = null)
     {
         Icon?.Dispose();
         Icon = icon;
+        if (item is not null)
+            SetBundledData(item);
     }
+
+    public void SetPreviewIcon(ItemIconPreviewResult result, Bitmap icon)
+    {
+        Icon?.Dispose();
+        Icon = icon;
+        if ((ItemName == ItemString || string.IsNullOrWhiteSpace(ItemName)) && !string.IsNullOrWhiteSpace(result.Name))
+            ItemName = result.Name;
+        if (result.Quality >= 0)
+            QualityColor = QualityColorFor(result.Quality);
+    }
+
+    private void SetBundledData(BundledItemSummary item)
+    {
+        if ((ItemName == ItemString || string.IsNullOrWhiteSpace(ItemName)) && !string.IsNullOrWhiteSpace(item.Name))
+            ItemName = item.Name;
+        QualityColor = QualityColorFor(item.Quality);
+    }
+
+    private static string QualityColorFor(int quality) => quality switch
+    {
+        0 => "#9D9D9D",
+        1 => "#FFFFFF",
+        2 => "#1EFF00",
+        3 => "#0070DD",
+        4 => "#A335EE",
+        5 => "#FF8000",
+        6 => "#E6CC80",
+        7 => "#00CCFF",
+        _ => "#52575C"
+    };
 
     public void UnloadIcon()
     {
