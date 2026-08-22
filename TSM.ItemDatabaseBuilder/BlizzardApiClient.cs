@@ -120,8 +120,21 @@ internal sealed class BlizzardApiClient : IDisposable
                 }
                 if (response.IsSuccessStatusCode)
                 {
-                    await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                    return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                    try
+                    {
+                        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                    }
+                    catch (Exception exception) when (
+                        exception is IOException or HttpRequestException or JsonException &&
+                        attempt < _maximumAttempts)
+                    {
+                        var responseDelay = TimeSpan.FromSeconds(10);
+                        Console.Error.WriteLine(
+                            $"Blizzard API response ended early; retrying at {DateTimeOffset.Now.Add(responseDelay):T}.");
+                        await Task.Delay(responseDelay, cancellationToken);
+                        continue;
+                    }
                 }
                 if (attempt == _maximumAttempts || !ShouldRetry(response.StatusCode))
                     throw new HttpRequestException(

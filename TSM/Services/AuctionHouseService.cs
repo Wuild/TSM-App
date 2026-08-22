@@ -152,9 +152,7 @@ public sealed partial class AuctionHouseService(
                     !database.TryGetValue("names", out var rawNames) ||
                     !database.TryGetValue("itemStrings", out var rawStrings))
                     continue;
-                var names = FlattenChunks(rawNames).SelectMany(value => value.Split('\x02')).Where(value => value.Length > 0);
-                var itemStrings = FlattenChunks(rawStrings).SelectMany(value => value.Split('\x02')).Where(value => value.Length > 0);
-                foreach (var (itemString, name) in itemStrings.Zip(names))
+                foreach (var (itemString, name) in TsmItemNameLookup.Build(rawNames, rawStrings))
                     result.TryAdd(itemString, name);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException)
@@ -201,13 +199,6 @@ public sealed partial class AuctionHouseService(
     private static string NormalizeRegionKey(string value) => string.Join('-', value
         .Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .Order(StringComparer.OrdinalIgnoreCase));
-
-    private static IEnumerable<string> FlattenChunks(object? value) => value switch
-    {
-        string text => [text],
-        LuaTable table => table.Values.OfType<string>(),
-        _ => []
-    };
 
     private static string? FindAppDataPath(string addonsPath)
     {

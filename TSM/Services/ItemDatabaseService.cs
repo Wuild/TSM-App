@@ -219,12 +219,12 @@ public sealed class ItemDatabaseService
     private static string ResolveFlavor(string flavor)
     {
         var value = flavor.Trim().ToLowerInvariant();
-        if (value.Contains("anniversary", StringComparison.Ordinal) || value == "tbc")
+        if (value.Contains("anniversary", StringComparison.Ordinal) || value is "tbc" or "bcc")
             return "tbc";
         if (value.Contains("era", StringComparison.Ordinal) || value.Contains("vanilla", StringComparison.Ordinal))
             return "vanilla";
         if (value.Contains("classic", StringComparison.Ordinal) || value.Contains("progress", StringComparison.Ordinal) ||
-            value.Contains("mop", StringComparison.Ordinal) || value == "bcc")
+            value.Contains("mop", StringComparison.Ordinal))
             return "mop";
         return "retail";
     }

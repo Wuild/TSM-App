@@ -159,7 +159,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
     {
         Icon?.Dispose();
         Icon = icon;
-        if ((ItemName == ItemString || string.IsNullOrWhiteSpace(ItemName)) && !string.IsNullOrWhiteSpace(result.Name))
+        if (!string.IsNullOrWhiteSpace(result.Name))
             ItemName = result.Name;
         _wowheadDetails = result.TooltipText;
         _hasItemDetails = true;
@@ -183,7 +183,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
     {
         Icon?.Dispose();
         Icon = icon;
-        if ((ItemName == ItemString || string.IsNullOrWhiteSpace(ItemName)) && !string.IsNullOrWhiteSpace(result.Name))
+        if (!string.IsNullOrWhiteSpace(result.Name))
             ItemName = result.Name;
         if (result.Quality >= 0)
             QualityColor = QualityColorFor(result.Quality);
@@ -191,7 +191,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
 
     private void SetBundledData(BundledItemSummary item)
     {
-        if ((ItemName == ItemString || string.IsNullOrWhiteSpace(ItemName)) && !string.IsNullOrWhiteSpace(item.Name))
+        if (!string.IsNullOrWhiteSpace(item.Name))
             ItemName = item.Name;
         QualityColor = QualityColorFor(item.Quality);
     }

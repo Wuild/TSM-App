@@ -116,10 +116,13 @@ try
             writeLock.Release();
         }
         var current = Interlocked.Increment(ref processed);
-        lock (consoleLock)
-            Console.Write($"\r[{current:N0}/{total:N0}] {catalog.Flavor} item {itemId}      ");
+        if (current == total || current % 100 == 0)
+        {
+            lock (consoleLock)
+                Console.WriteLine($"[{DateTimeOffset.Now:HH:mm:ss}] [{current:N0}/{total:N0}] " +
+                                  $"{catalog.Flavor} item {itemId}");
+        }
     });
-    Console.WriteLine();
 
     if (options.ManifestPath is not null)
         await WriteManifestAsync(options.OutputPath, options.ManifestPath, cancellation.Token);

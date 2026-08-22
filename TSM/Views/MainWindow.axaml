@@ -129,6 +129,31 @@
     <Style Selector="ListBox.auction-list > ListBoxItem:selected:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="#30281D" />
     </Style>
+    <Style Selector="ListBox.accounting-periods">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.accounting-periods > ListBoxItem">
+      <Setter Property="MinWidth" Value="37" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="9,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="#969A9E" />
+      <Setter Property="BorderBrush" Value="#373737" />
+      <Setter Property="BorderThickness" Value="0,0,1,0" />
+      <Setter Property="FontSize" Value="10" />
+    </Style>
+    <Style Selector="ListBox.accounting-periods > ListBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#292724" />
+      <Setter Property="Foreground" Value="#F0F0EF" />
+    </Style>
+    <Style Selector="ListBox.accounting-periods > ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="#3A2B18" />
+      <Setter Property="Foreground" Value="#F4B04D" />
+    </Style>
     <Style Selector="TabItem.settings-tab">
       <Setter Property="Height" Value="36" />
       <Setter Property="Padding" Value="14,0" />
@@ -608,7 +633,7 @@
                         <TextBlock Grid.Column="1" Text="{Binding AuctionItemDrawerItem.PriceHistoryRange}"
                                    Classes="muted" FontSize="9" />
                       </Grid>
-                      <Border Height="76" Background="#0E0E0E" BorderBrush="#303030" BorderThickness="1"
+                      <Border Height="104" Background="#0E0E0E" BorderBrush="#303030" BorderThickness="1"
                               CornerRadius="3" Padding="7" IsVisible="{Binding AuctionItemDrawerItem.HasPriceChart}">
                         <controls:PriceHistoryChart Points="{Binding AuctionItemDrawerItem.PriceHistory}" />
                       </Border>
@@ -758,7 +783,7 @@
             <Grid RowDefinitions="Auto,*">
               <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
                       BorderThickness="0,0,0,1" Padding="16,10">
-                <Grid ColumnDefinitions="1.4*,1.05*,1.05*,Auto,Auto" ColumnSpacing="10">
+                <Grid ColumnDefinitions="1.4*,1.05*,1.05*,Auto" ColumnSpacing="10">
                   <ComboBox PlaceholderText="Choose an account" ItemsSource="{Binding AccountingAccounts}"
                             SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch">
                     <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
@@ -766,10 +791,9 @@
                   <ComboBox Grid.Column="1" PlaceholderText="Choose a realm" ItemsSource="{Binding AccountingRealms}"
                             SelectedItem="{Binding SelectedRealm}" HorizontalAlignment="Stretch" />
                   <ComboBox Grid.Column="2" ItemsSource="{Binding AccountingPlayers}"
-                            SelectedItem="{Binding SelectedAccountingPlayer}" HorizontalAlignment="Stretch" />
-                  <ComboBox Grid.Column="3" Width="78" ItemsSource="{Binding AccountingPeriods}"
-                            SelectedItem="{Binding SelectedAccountingPeriod}" />
-                  <Button Grid.Column="4" Classes="icon" Command="{Binding RefreshAccountingStatisticsCommand}"
+                            SelectedItem="{Binding SelectedAccountingPlayer, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch" />
+                  <Button Grid.Column="3" Classes="icon" Command="{Binding RefreshAccountingStatisticsCommand}"
                           ToolTip.Tip="Reload local Accounting statistics">
                     <lucide:LucideIcon Kind="RefreshCw" Size="15" StrokeWidth="1.8" />
                   </Button>
@@ -780,13 +804,22 @@
                 <StackPanel>
                   <Border Padding="18,16,18,14" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
                     <StackPanel Spacing="12">
-                      <Grid ColumnDefinitions="*,Auto">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                         <StackPanel Spacing="3">
                           <TextBlock Text="Player gold" FontSize="15" FontWeight="SemiBold" />
                           <TextBlock Text="{Binding AccountingStatisticsStatus}" Classes="muted" FontSize="9" />
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="Recorded character balances" Classes="muted"
-                                   FontSize="9" VerticalAlignment="Bottom" />
+                        <Border Grid.Column="1" BorderBrush="#373737" BorderThickness="1"
+                                CornerRadius="3" ClipToBounds="True" VerticalAlignment="Center">
+                          <ListBox Classes="accounting-periods" ItemsSource="{Binding AccountingPeriods}"
+                                   SelectedItem="{Binding SelectedAccountingPeriod}">
+                            <ListBox.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" />
+                              </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                          </ListBox>
+                        </Border>
                       </Grid>
                       <Border Height="205" Background="#121212" BorderBrush="#2C2C2C" BorderThickness="1"
                               CornerRadius="3" Padding="10">
@@ -860,12 +893,28 @@
                           <TextBlock Grid.Column="3" Text="PROFIT" Classes="field-label" VerticalAlignment="Center" />
                         </Grid>
                       </Border>
-                      <ItemsControl Grid.Row="1" ItemsSource="{Binding AccountingStatistics.TopItems}">
+                      <ItemsControl Grid.Row="1" ItemsSource="{Binding AccountingTopItems}">
                         <ItemsControl.ItemTemplate>
                           <DataTemplate>
                             <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="18,9">
                               <Grid ColumnDefinitions="2*,1*,1*,1*">
-                                <StackPanel Spacing="2"><TextBlock Text="{Binding ItemName}" FontWeight="SemiBold"/><TextBlock Text="{Binding ItemString}" Classes="muted" FontSize="9"/></StackPanel>
+                                <Grid ColumnDefinitions="38,*" ColumnSpacing="9">
+                                  <Border Width="36" Height="36" CornerRadius="6"
+                                          Background="{Binding QualityColor}" Padding="2">
+                                    <Border Width="32" Height="32" CornerRadius="4" Background="#111111"
+                                            ClipToBounds="True">
+                                      <Image Width="32" Height="32" Source="{Binding Icon}" Stretch="UniformToFill">
+                                        <Image.Clip>
+                                          <RectangleGeometry Rect="0,0,32,32" RadiusX="4" RadiusY="4" />
+                                        </Image.Clip>
+                                      </Image>
+                                    </Border>
+                                  </Border>
+                                  <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ItemName}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding ItemString}" Classes="muted" FontSize="9"/>
+                                  </StackPanel>
+                                </Grid>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center"><Run Text="{Binding EarnedParts.Empty}" Foreground="#737A81"/><Run Text="{Binding EarnedParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding EarnedParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding EarnedParts.Copper}" Foreground="#C77C43"/></TextBlock>
                                 <TextBlock Grid.Column="2" VerticalAlignment="Center"><Run Text="{Binding SpentParts.Empty}" Foreground="#737A81"/><Run Text="{Binding SpentParts.Gold}" Foreground="#FFD100"/><Run Text="{Binding SpentParts.Silver}" Foreground="#C7CED6"/><Run Text="{Binding SpentParts.Copper}" Foreground="#C77C43"/></TextBlock>
                                 <TextBlock Grid.Column="3" VerticalAlignment="Center" Foreground="{Binding ProfitColor}"><Run Text="{Binding ProfitSign}"/><Run Text="{Binding ProfitParts.Empty}"/><Run Text="{Binding ProfitParts.Gold}"/><Run Text="{Binding ProfitParts.Silver}"/><Run Text="{Binding ProfitParts.Copper}"/></TextBlock>
@@ -990,6 +1039,12 @@
                       <TextBlock Text="Update status" FontWeight="SemiBold" FontSize="11" />
                       <StackPanel Grid.Column="1" Spacing="10">
                         <TextBlock Text="{Binding UpdateStatus}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                        <StackPanel Spacing="6" IsVisible="{Binding IsUpdateProgressVisible}">
+                          <ProgressBar Height="5" Minimum="0" Maximum="100"
+                                       Value="{Binding UpdateProgressPercent}"
+                                       IsIndeterminate="{Binding IsUpdateProgressIndeterminate}" />
+                          <TextBlock Text="{Binding UpdateProgressDetail}" Classes="muted" FontSize="9" />
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <Button Content="Check now" Command="{Binding CheckForUpdatesCommand}" />
                           <Button Classes="primary" Content="{Binding UpdateInstallAction}" Command="{Binding InstallUpdateCommand}"
@@ -1298,5 +1353,28 @@
         </Grid>
       </Grid>
     </Grid>
+
+    <Border IsVisible="{Binding IsUpdateProgressVisible}" ZIndex="100"
+            HorizontalAlignment="Center" VerticalAlignment="Bottom" Width="460" Margin="20"
+            Background="#24211D" BorderBrush="#6A4A20" BorderThickness="1" CornerRadius="5"
+            Padding="15,12" BoxShadow="0 8 24 0 #A0000000">
+      <Grid ColumnDefinitions="28,*" ColumnSpacing="11">
+        <lucide:LucideIcon Kind="Download" Size="19" StrokeWidth="1.9" Foreground="#F5A623"
+                           VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Spacing="7">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <TextBlock Text="{Binding UpdateStatus}" FontWeight="SemiBold" FontSize="11"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="1" Text="{Binding UpdateProgressDetail}" Classes="muted" FontSize="9"
+                       VerticalAlignment="Center" />
+          </Grid>
+          <ProgressBar Height="5" Minimum="0" Maximum="100"
+                       Value="{Binding UpdateProgressPercent}"
+                       IsIndeterminate="{Binding IsUpdateProgressIndeterminate}" />
+          <TextBlock Text="TSM will restart after the update is prepared."
+                     Classes="muted" FontSize="9" />
+        </StackPanel>
+      </Grid>
+    </Border>
   </Grid>
 </Window>

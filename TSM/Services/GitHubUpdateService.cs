@@ -26,6 +26,14 @@ public sealed record GitHubAppUpdate(
     UpdatePackageKind PackageKind,
     bool IsPrerelease);
 
+public sealed record AppUpdateProgress(string Status, long BytesReceived = 0, long? TotalBytes = null)
+{
+    public double Percentage => TotalBytes is > 0
+        ? Math.Clamp((double)BytesReceived / TotalBytes.Value * 100, 0, 100)
+        : 0;
+    public bool IsIndeterminate => TotalBytes is null;
+}
+
 public sealed class GitHubUpdateService : IDisposable
 {
     public const string RepositoryOwner = "Wuild";
@@ -78,7 +86,8 @@ public sealed class GitHubUpdateService : IDisposable
             .FirstOrDefault();
     }
 
-    public async Task InstallAsync(GitHubAppUpdate update, CancellationToken cancellationToken = default)
+    public async Task InstallAsync(GitHubAppUpdate update, IProgress<AppUpdateProgress>? progress = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(update);
         if (update.PackageDownload is null || update.PackageKind == UpdatePackageKind.None)
@@ -87,13 +96,13 @@ public sealed class GitHubUpdateService : IDisposable
         switch (update.PackageKind)
         {
             case UpdatePackageKind.AppImage:
-                await InstallAppImageAsync(update.PackageDownload, cancellationToken);
+                await InstallAppImageAsync(update.PackageDownload, progress, cancellationToken);
                 break;
             case UpdatePackageKind.WindowsZip:
-                await StageWindowsUpdateAsync(update.PackageDownload, cancellationToken);
+                await StageWindowsUpdateAsync(update.PackageDownload, progress, cancellationToken);
                 break;
             case UpdatePackageKind.MacAppZip:
-                await StageMacUpdateAsync(update.PackageDownload, cancellationToken);
+                await StageMacUpdateAsync(update.PackageDownload, progress, cancellationToken);
                 break;
             default:
                 throw new PlatformNotSupportedException("Automatic installation is not supported by this package.");
@@ -109,7 +118,8 @@ public sealed class GitHubUpdateService : IDisposable
             _httpClient.Dispose();
     }
 
-    private async Task InstallAppImageAsync(Uri download, CancellationToken cancellationToken)
+    private async Task InstallAppImageAsync(Uri download, IProgress<AppUpdateProgress>? progress,
+        CancellationToken cancellationToken)
     {
         var appImagePath = Environment.GetEnvironmentVariable("APPIMAGE");
         if (!OperatingSystem.IsLinux() || string.IsNullOrWhiteSpace(appImagePath))
@@ -122,7 +132,8 @@ public sealed class GitHubUpdateService : IDisposable
         var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(appImagePath)}.{Guid.NewGuid():N}.update");
         try
         {
-            await DownloadAsync(download, temporaryPath, cancellationToken);
+            await DownloadAsync(download, temporaryPath, progress, cancellationToken);
+            progress?.Report(new AppUpdateProgress("Installing update…"));
             File.SetUnixFileMode(temporaryPath,
                 UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
                 UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
@@ -137,7 +148,8 @@ public sealed class GitHubUpdateService : IDisposable
         }
     }
 
-    private async Task StageWindowsUpdateAsync(Uri download, CancellationToken cancellationToken)
+    private async Task StageWindowsUpdateAsync(Uri download, IProgress<AppUpdateProgress>? progress,
+        CancellationToken cancellationToken)
     {
         if (!OperatingSystem.IsWindows() || !IsPublishedWindowsApplication())
             throw new InvalidOperationException("Automatic Windows updates require the published TSM application.");
@@ -154,7 +166,8 @@ public sealed class GitHubUpdateService : IDisposable
         Directory.CreateDirectory(temporaryRoot);
         try
         {
-            await DownloadAsync(download, archivePath, cancellationToken);
+            await DownloadAsync(download, archivePath, progress, cancellationToken);
+            progress?.Report(new AppUpdateProgress("Preparing update package…"));
             ZipFile.ExtractToDirectory(archivePath, stagedDirectory);
             EnsureSafeApplicationDirectory(stagedDirectory, "TSM.exe");
             File.Delete(archivePath);
@@ -185,6 +198,7 @@ public sealed class GitHubUpdateService : IDisposable
             startInfo.ArgumentList.Add(WindowsUpdateLogPath());
             _ = Process.Start(startInfo) ??
                 throw new InvalidOperationException("The Windows update helper could not be started.");
+            progress?.Report(new AppUpdateProgress("Update ready. Restarting TSM…"));
         }
         catch
         {
@@ -194,7 +208,8 @@ public sealed class GitHubUpdateService : IDisposable
         }
     }
 
-    private async Task StageMacUpdateAsync(Uri download, CancellationToken cancellationToken)
+    private async Task StageMacUpdateAsync(Uri download, IProgress<AppUpdateProgress>? progress,
+        CancellationToken cancellationToken)
     {
         var targetBundle = FindMacBundle();
         if (!OperatingSystem.IsMacOS() || targetBundle is null)
@@ -209,7 +224,8 @@ public sealed class GitHubUpdateService : IDisposable
         Directory.CreateDirectory(extractedDirectory);
         try
         {
-            await DownloadAsync(download, archivePath, cancellationToken);
+            await DownloadAsync(download, archivePath, progress, cancellationToken);
+            progress?.Report(new AppUpdateProgress("Preparing update package…"));
             var ditto = new ProcessStartInfo("/usr/bin/ditto") { UseShellExecute = false };
             ditto.ArgumentList.Add("-x");
             ditto.ArgumentList.Add("-k");
@@ -242,6 +258,7 @@ public sealed class GitHubUpdateService : IDisposable
             startInfo.ArgumentList.Add(temporaryRoot);
             _ = Process.Start(startInfo) ??
                 throw new InvalidOperationException("The macOS update helper could not be started.");
+            progress?.Report(new AppUpdateProgress("Update ready. Restarting TSM…"));
         }
         catch
         {
@@ -251,7 +268,8 @@ public sealed class GitHubUpdateService : IDisposable
         }
     }
 
-    private async Task DownloadAsync(Uri download, string destination, CancellationToken cancellationToken)
+    private async Task DownloadAsync(Uri download, string destination, IProgress<AppUpdateProgress>? progress,
+        CancellationToken cancellationToken)
     {
         using var response = await _httpClient.GetAsync(download,
             HttpCompletionOption.ResponseHeadersRead, cancellationToken);
@@ -259,11 +277,16 @@ public sealed class GitHubUpdateService : IDisposable
         if (response.Content.Headers.ContentLength is > MaximumPackageBytes)
             throw new InvalidDataException("The update package is unexpectedly large.");
 
+        var contentLength = response.Content.Headers.ContentLength;
+        progress?.Report(new AppUpdateProgress("Downloading update…", 0, contentLength));
+
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
         await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write,
             FileShare.None, 81920, FileOptions.WriteThrough);
         var buffer = new byte[81920];
         long total = 0;
+        long lastReportedBytes = 0;
+        var lastReportedPercent = -1;
         int read;
         while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
         {
@@ -271,7 +294,15 @@ public sealed class GitHubUpdateService : IDisposable
             if (total > MaximumPackageBytes)
                 throw new InvalidDataException("The update package is unexpectedly large.");
             await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            var percent = contentLength is > 0 ? (int)(total * 100 / contentLength.Value) : -1;
+            if (percent != lastReportedPercent || total - lastReportedBytes >= 1_000_000)
+            {
+                progress?.Report(new AppUpdateProgress("Downloading update…", total, contentLength));
+                lastReportedPercent = percent;
+                lastReportedBytes = total;
+            }
         }
+        progress?.Report(new AppUpdateProgress("Download complete.", total, contentLength ?? total));
     }
 
     private static GitHubAppUpdate? ToUpdate(ReleaseDto release)

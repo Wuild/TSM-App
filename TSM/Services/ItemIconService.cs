@@ -456,7 +456,7 @@ public sealed partial class ItemIconService : IDisposable
     private static string ResolveFlavorKey(string flavor)
     {
         var value = flavor.Trim().ToLowerInvariant();
-        if (value.Contains("anniversary", StringComparison.Ordinal))
+        if (value.Contains("anniversary", StringComparison.Ordinal) || value is "bcc" or "tbc")
             return "tbc";
         if (value.Contains("classic era", StringComparison.Ordinal) && value.Contains("ptr", StringComparison.Ordinal))
             return "classic-ptr";
@@ -469,7 +469,7 @@ public sealed partial class ItemIconService : IDisposable
         if (value.Contains("era", StringComparison.Ordinal))
             return "classic";
         if (value.Contains("progress", StringComparison.Ordinal) || value.Contains("mop", StringComparison.Ordinal) ||
-            value.Contains("classic", StringComparison.Ordinal) || value is "bcc")
+            value.Contains("classic", StringComparison.Ordinal))
             return "mop-classic";
         if (value.Contains("ptr", StringComparison.Ordinal))
             return "ptr";

@@ -326,6 +326,11 @@ static void QueryBundledItemDatabase()
             Name: "Belt of Blasting", Quality: 4, Level: 128, RequiredLevel: 70,
             ClassName: "Armor", SubclassName: "Cloth", InventoryName: "Waist", SellPrice: 26881
         }, "bundled TBC item fields were incomplete");
+    Assert(service.Get("i:30038", "bcc")?.Name == "Belt of Blasting",
+        "the bcc flavor did not resolve to the TBC database partition");
+    Assert(ItemIconService.BuildItemPageUri("i:21943", "bcc")?.AbsoluteUri ==
+           "https://www.wowhead.com/tbc/item=21943",
+        "the bcc flavor did not resolve to TBC Wowhead");
     Assert(belt!.PreviewJson.Contains("Improves spell hit rating by 23", StringComparison.Ordinal),
         "compressed Blizzard preview data did not round-trip");
     var results = service.Query(new ItemDatabaseQuery("Anniversary", "Belt of Blasting", 4, 4, 1, "WAIST", 10));
@@ -590,12 +595,13 @@ static void IndexAuctionHouseSnapshot()
     var appHelperSavedVariablesPath = Path.Combine(temporaryRoot, "TradeSkillMaster_AppHelper.lua");
     var appDataPath = Path.Combine(temporaryRoot, "AppData.lua");
     File.WriteAllText(savedVariablesPath,
-        "TSMItemInfoDB = { [\"names\"] = \"Test Item\\002\", [\"itemStrings\"] = \"i:24997\\002\", }");
+        "TSMItemInfoDB = { [\"names\"] = { [1] = \"Test Item\\002\\002Design: Truesilver Crab\\002\" }, " +
+        "[\"itemStrings\"] = { [1] = \"i:24997\\002i:12345\\002i:21943\\002\" }, }");
     File.WriteAllText(appHelperSavedVariablesPath,
         "TradeSkillMaster_AppHelperDB = { [\"region\"] = \"EU-Fresh\", }");
     File.WriteAllText(appDataPath,
-        "select(2, ...).LoadData(\"AUCTIONDB_NON_COMMODITY_DATA\",\"TestRealm-Alliance\",[[return {downloadTime=1700000000,fields={\"itemString\",\"minBuyout\",\"numAuctions\",\"marketValueRecent\"},data={{24997,1TGO,G,3PH2}}}]]) --<AUCTIONDB_NON_COMMODITY_DATA,TestRealm-Alliance,1700000000>\n" +
-        "select(2, ...).LoadData(\"AUCTIONDB_REGION_SALE\",\"Fresh-EU\",[[return {downloadTime=1700000000,fields={\"itemString\",\"regionSale\",\"regionSoldPerDay\",\"regionSalePercent\"},data={{24997,34,6QO,3O}}}]]) --<AUCTIONDB_REGION_SALE,Fresh-EU,1700000000>\n");
+        "select(2, ...).LoadData(\"AUCTIONDB_NON_COMMODITY_DATA\",\"TestRealm-Alliance\",[[return {downloadTime=1700000000,fields={\"itemString\",\"minBuyout\",\"numAuctions\",\"marketValueRecent\"},data={{21943,1TGO,G,3PH2}}}]]) --<AUCTIONDB_NON_COMMODITY_DATA,TestRealm-Alliance,1700000000>\n" +
+        "select(2, ...).LoadData(\"AUCTIONDB_REGION_SALE\",\"Fresh-EU\",[[return {downloadTime=1700000000,fields={\"itemString\",\"regionSale\",\"regionSoldPerDay\",\"regionSalePercent\"},data={{21943,34,6QO,3O}}}]]) --<AUCTIONDB_REGION_SALE,Fresh-EU,1700000000>\n");
     try
     {
         var account = new TsmAccount("TEST · Retail", "TEST", "Retail", savedVariablesPath,
@@ -603,7 +609,8 @@ static void IndexAuctionHouseSnapshot()
             AppDataPath: appDataPath);
         var service = new AuctionHouseService(new AppDataCatalogParser(), new LuaSavedVariablesParser());
         var row = service.BuildIndex([account], []).Single();
-        Assert(row.ItemString == "i:24997" && row.ItemName == "Test Item", "auction item identity was not decoded");
+        Assert(row.ItemString == "i:21943" && row.ItemName == "Design: Truesilver Crab",
+            "empty TSM names shifted the auction item identity");
         Assert(row.MinBuyout == 63000 && row.NumAuctions == 16 && row.MarketValueRecent == 124450,
             "base-32 AuctionDB values were not decoded correctly");
         Assert(row.RegionSaleAverage == 100 && row.RegionSoldPerDay == 7000 &&

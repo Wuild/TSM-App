@@ -65,10 +65,15 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string? _selectedRealm;
     private AccountingStatistics _accountingStatistics = AccountingStatistics.Empty;
     private string _selectedAccountingPlayer = "All players";
+    private IReadOnlyList<string> _accountingPlayers = ["All players"];
     private AccountingPeriodOption _selectedAccountingPeriod;
     private string _accountingStatisticsStatus = "Select an account and realm to view statistics.";
     private CancellationTokenSource? _accountingStatisticsCancellation;
     private Task? _accountingStatisticsRunner;
+    private CancellationTokenSource? _accountingIconCancellation;
+    private Task? _accountingIconRunner;
+    private IReadOnlyList<AccountingItemViewModel> _accountingTopItems = [];
+    private readonly SemaphoreSlim _accountingIconSlots = new(3, 3);
     private bool _suppressAccountingRefresh;
     private bool _accountingStatisticsDirty = true;
     private string? _loadedAccountingStatisticsKey;
@@ -96,6 +101,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _auctionResultSummary = "No auction data has been indexed yet.";
     private AuctionHouseItemViewModel? _selectedAuctionItem;
     private bool _isCheckingForUpdates;
+    private bool _isInstallingUpdate;
+    private double _updateProgressPercent;
+    private bool _isUpdateProgressIndeterminate;
+    private string _updateProgressDetail = string.Empty;
     private string _updateStatus = "Updates have not been checked yet.";
     private GitHubAppUpdate? _availableAppUpdate;
     private CancellationTokenSource? _updateCheckCancellation;
@@ -213,8 +222,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         OpenAuctionItemInWowheadCommand = new DelegateCommand(OpenAuctionItemInWowhead,
             () => AuctionItemDrawerItem?.WowheadUri is not null);
         CloseAuctionItemDrawerCommand = new DelegateCommand(CloseAuctionItemDrawer);
-        CheckForUpdatesCommand = new AsyncCommand(() => CheckForUpdatesAsync(true), () => !IsCheckingForUpdates);
-        InstallUpdateCommand = new AsyncCommand(InstallUpdateAsync, () => AvailableAppUpdate is not null);
+        CheckForUpdatesCommand = new AsyncCommand(() => CheckForUpdatesAsync(true),
+            () => !IsCheckingForUpdates && !IsInstallingUpdate);
+        InstallUpdateCommand = new AsyncCommand(InstallUpdateAsync,
+            () => AvailableAppUpdate is not null && !IsCheckingForUpdates && !IsInstallingUpdate);
 
         RefreshLocalData();
     }
@@ -248,7 +259,16 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public ObservableCollection<AddonStatusRow> AddonStatuses { get; } = [];
     public ObservableCollection<TsmAccount> AccountingAccounts { get; } = [];
     public ObservableCollection<string> AccountingRealms { get; } = [];
-    public ObservableCollection<string> AccountingPlayers { get; } = ["All players"];
+    public IReadOnlyList<string> AccountingPlayers
+    {
+        get => _accountingPlayers;
+        private set => SetProperty(ref _accountingPlayers, value);
+    }
+    public IReadOnlyList<AccountingItemViewModel> AccountingTopItems
+    {
+        get => _accountingTopItems;
+        private set => SetProperty(ref _accountingTopItems, value);
+    }
     public IReadOnlyList<AccountingPeriodOption> AccountingPeriods { get; } =
     [
         new("1D", 1), new("1W", 7), new("1M", 30), new("3M", 90), new("6M", 180),
@@ -355,6 +375,34 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
     }
     public string UpdateStatus { get => _updateStatus; private set => SetProperty(ref _updateStatus, value); }
+    public bool IsInstallingUpdate
+    {
+        get => _isInstallingUpdate;
+        private set
+        {
+            if (!SetProperty(ref _isInstallingUpdate, value))
+                return;
+            OnPropertyChanged(nameof(IsUpdateProgressVisible));
+            CheckForUpdatesCommand.RaiseCanExecuteChanged();
+            InstallUpdateCommand.RaiseCanExecuteChanged();
+        }
+    }
+    public bool IsUpdateProgressVisible => IsInstallingUpdate;
+    public double UpdateProgressPercent
+    {
+        get => _updateProgressPercent;
+        private set => SetProperty(ref _updateProgressPercent, value);
+    }
+    public bool IsUpdateProgressIndeterminate
+    {
+        get => _isUpdateProgressIndeterminate;
+        private set => SetProperty(ref _isUpdateProgressIndeterminate, value);
+    }
+    public string UpdateProgressDetail
+    {
+        get => _updateProgressDetail;
+        private set => SetProperty(ref _updateProgressDetail, value);
+    }
     public GitHubAppUpdate? AvailableAppUpdate
     {
         get => _availableAppUpdate;
@@ -516,6 +564,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             _suppressAccountingRefresh = true;
             try
             {
+                ResetAccountingPlayerSelection();
                 LoadAccountingRealms();
             }
             finally
@@ -533,6 +582,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetProperty(ref _selectedRealm, value))
             {
+                ResetAccountingPlayerSelection();
                 InvalidateAccountingStatistics();
             }
         }
@@ -549,7 +599,19 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         set
         {
             if (SetProperty(ref _selectedAccountingPlayer, value ?? "All players"))
+            {
+                OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
                 InvalidateAccountingStatistics();
+            }
+        }
+    }
+    public int SelectedAccountingPlayerIndex
+    {
+        get => Math.Max(0, AccountingPlayers.ToList().IndexOf(SelectedAccountingPlayer));
+        set
+        {
+            if (value >= 0 && value < AccountingPlayers.Count)
+                SelectedAccountingPlayer = AccountingPlayers[value];
         }
     }
     public AccountingPeriodOption SelectedAccountingPeriod
@@ -722,6 +784,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             Settings.LoadOnlineItemIcons = value;
             OnPropertyChanged();
             QueueAuctionSearch();
+            if (value)
+                StartAccountingIconLoading();
+            else
+                StopAccountingIconLoading(true);
         }
     }
     public TsmRealmChoice? SelectedAvailableRealm
@@ -1447,6 +1513,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             await _updateCheckCancellation.CancelAsync();
         if (_accountingStatisticsCancellation is not null)
             await _accountingStatisticsCancellation.CancelAsync();
+        if (_accountingIconCancellation is not null)
+            await _accountingIconCancellation.CancelAsync();
         if (_updateCheckRunner is not null)
         {
             try
@@ -1477,6 +1545,16 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             {
             }
         }
+        if (_accountingIconRunner is not null)
+        {
+            try
+            {
+                await _accountingIconRunner;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
         if (_activeTooltipRunner is not null)
         {
             try
@@ -1492,6 +1570,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _activeTooltipCancellation?.Dispose();
         _auctionSearchCancellation?.Dispose();
         _accountingStatisticsCancellation?.Dispose();
+        _accountingIconCancellation?.Dispose();
+        foreach (var item in AccountingTopItems)
+            item.Dispose();
         foreach (var item in AuctionResults)
             item.Dispose();
         _itemIconService.DownloadPaused -= ItemInfoDownloadPaused;
@@ -1584,12 +1665,26 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             return;
         }
 
-        IsCheckingForUpdates = true;
-        UpdateStatus = $"Downloading TSM {update.Version}…";
+        IsInstallingUpdate = true;
+        UpdateProgressPercent = 0;
+        IsUpdateProgressIndeterminate = true;
+        UpdateProgressDetail = string.Empty;
+        UpdateStatus = $"Starting TSM {update.Version} update…";
         try
         {
-            await _appUpdates.InstallAsync(update);
-            UpdateStatus = "Update installed. Restarting…";
+            var progress = new Progress<AppUpdateProgress>(value =>
+            {
+                UpdateStatus = value.Status;
+                UpdateProgressPercent = value.Percentage;
+                IsUpdateProgressIndeterminate = value.IsIndeterminate;
+                UpdateProgressDetail = FormatUpdateProgress(value);
+            });
+            await _appUpdates.InstallAsync(update, progress);
+            UpdateStatus = $"TSM {update.Version} is ready. Restarting…";
+            UpdateProgressPercent = 100;
+            IsUpdateProgressIndeterminate = false;
+            UpdateProgressDetail = "Download complete";
+            await Task.Delay(1200);
             if (Application.Current is App app)
                 app.Shutdown();
         }
@@ -1599,8 +1694,31 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
         finally
         {
-            IsCheckingForUpdates = false;
+            IsInstallingUpdate = false;
         }
+    }
+
+    private static string FormatUpdateProgress(AppUpdateProgress progress)
+    {
+        if (progress.BytesReceived <= 0)
+            return string.Empty;
+        var received = FormatBytes(progress.BytesReceived);
+        return progress.TotalBytes is > 0
+            ? $"{progress.Percentage:0}% · {received} of {FormatBytes(progress.TotalBytes.Value)}"
+            : $"{received} downloaded";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB"];
+        var value = (double)Math.Max(0, bytes);
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return $"{value:0.#} {units[unit]}";
     }
 
     private async Task<ApiLoginResult?> RestoreSavedLoginAsync(CancellationToken cancellationToken = default)
@@ -1654,6 +1772,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         if (SelectedAccount is null || string.IsNullOrWhiteSpace(SelectedRealm))
         {
             AccountingStatistics = AccountingStatistics.Empty;
+            ReplaceAccountingTopItems([], string.Empty);
             AccountingStatisticsStatus = "Select an account and realm to view statistics.";
             return;
         }
@@ -1688,6 +1807,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 if (cancellation.IsCancellationRequested || !ReferenceEquals(_accountingStatisticsCancellation, cancellation))
                     return;
                 AccountingStatistics = statistics;
+                ReplaceAccountingTopItems(statistics.TopItems, account.GameVersion);
                 var previousPlayer = SelectedAccountingPlayer;
                 var availablePlayers = new[] { "All players" }.Concat(statistics.Players).ToArray();
                 if (!AccountingPlayers.SequenceEqual(availablePlayers, StringComparer.OrdinalIgnoreCase))
@@ -1695,12 +1815,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                     _suppressAccountingRefresh = true;
                     try
                     {
-                        AccountingPlayers.Clear();
-                        foreach (var availablePlayer in availablePlayers)
-                            AccountingPlayers.Add(availablePlayer);
-                        _selectedAccountingPlayer = availablePlayers.Contains(previousPlayer,
+                        AccountingPlayers = availablePlayers;
+                        SelectedAccountingPlayer = availablePlayers.Contains(previousPlayer,
                             StringComparer.OrdinalIgnoreCase) ? previousPlayer : "All players";
-                        OnPropertyChanged(nameof(SelectedAccountingPlayer));
+                        OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
                     }
                     finally
                     {
@@ -1731,6 +1849,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 if (!ReferenceEquals(_accountingStatisticsCancellation, cancellation))
                     return;
                 AccountingStatistics = AccountingStatistics.Empty;
+                ReplaceAccountingTopItems([], string.Empty);
                 AccountingStatisticsStatus = $"Could not read Accounting history: {exception.Message}";
             });
             GlobalErrorService.Report(exception, "Accounting statistics");
@@ -1743,6 +1862,111 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                     _accountingStatisticsCancellation = null;
                 cancellation.Dispose();
             });
+        }
+    }
+
+    private void ResetAccountingPlayerSelection()
+    {
+        if (string.Equals(_selectedAccountingPlayer, "All players", StringComparison.Ordinal))
+        {
+            OnPropertyChanged(nameof(SelectedAccountingPlayer));
+            OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
+            return;
+        }
+        _selectedAccountingPlayer = "All players";
+        OnPropertyChanged(nameof(SelectedAccountingPlayer));
+        OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
+    }
+
+    private void ReplaceAccountingTopItems(IReadOnlyList<AccountingItemSummary> items, string flavor)
+    {
+        StopAccountingIconLoading(false);
+        foreach (var item in AccountingTopItems)
+            item.Dispose();
+        AccountingTopItems = items.Select(item => new AccountingItemViewModel(item, flavor)).ToArray();
+        StartAccountingIconLoading();
+    }
+
+    private void StartAccountingIconLoading()
+    {
+        if (!LoadOnlineItemIcons || AccountingTopItems.Count == 0 || _accountingIconCancellation is not null)
+            return;
+        var cancellation = new CancellationTokenSource();
+        _accountingIconCancellation = cancellation;
+        var rows = AccountingTopItems.ToArray();
+        _accountingIconRunner = LoadAccountingIconsAsync(rows, cancellation);
+    }
+
+    private void StopAccountingIconLoading(bool unloadIcons)
+    {
+        var cancellation = _accountingIconCancellation;
+        _accountingIconCancellation = null;
+        cancellation?.Cancel();
+        if (unloadIcons)
+        {
+            foreach (var item in AccountingTopItems)
+                item.UnloadIcon();
+        }
+    }
+
+    private async Task LoadAccountingIconsAsync(AccountingItemViewModel[] rows,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.WhenAll(rows.Select(row => LoadAccountingIconAsync(row, cancellation.Token)));
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (ReferenceEquals(_accountingIconCancellation, cancellation))
+                    _accountingIconCancellation = null;
+                cancellation.Dispose();
+            });
+        }
+    }
+
+    private async Task LoadAccountingIconAsync(AccountingItemViewModel row, CancellationToken token)
+    {
+        var slotAcquired = false;
+        try
+        {
+            await _accountingIconSlots.WaitAsync(token);
+            slotAcquired = true;
+            var result = await _itemIconService.GetIconAsync(row.ItemString, row.Flavor, token);
+            if (result is null)
+                return;
+            var icon = await Task.Run(() => LoadBitmap(result.Path), token);
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (token.IsCancellationRequested || !AccountingTopItems.Contains(row))
+                        return;
+                    row.SetIcon(result, icon);
+                    icon = null;
+                });
+            }
+            finally
+            {
+                icon?.Dispose();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception) when (exception is HttpRequestException or IOException or JsonException or
+                                           ArgumentException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            if (slotAcquired)
+                _accountingIconSlots.Release();
         }
     }
 
@@ -1815,6 +2039,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
 
         LoadAccountingAccounts();
+        InvalidateAccountingStatistics();
         LoadRealmDataStatuses();
         if (refreshAuctionIndex)
             LoadAuctionIndex();

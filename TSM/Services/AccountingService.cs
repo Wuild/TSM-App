@@ -331,17 +331,8 @@ public sealed class AccountingService(LuaSavedVariablesParser parser)
             !itemInfo.TryGetValue("itemStrings", out var rawStrings))
             return new Dictionary<string, string>(StringComparer.Ordinal);
 
-        var names = FlattenChunks(rawNames).SelectMany(value => value.Split('\x02')).Where(value => value.Length > 0);
-        var itemStrings = FlattenChunks(rawStrings).SelectMany(value => value.Split('\x02')).Where(value => value.Length > 0);
-        return itemStrings.Zip(names).ToDictionary(pair => pair.First, pair => pair.Second, StringComparer.Ordinal);
+        return new Dictionary<string, string>(TsmItemNameLookup.Build(rawNames, rawStrings), StringComparer.Ordinal);
     }
-
-    private static IEnumerable<string> FlattenChunks(object? value) => value switch
-    {
-        string text => [text],
-        LuaTable table => table.Values.OfType<string>(),
-        _ => []
-    };
 
     internal static IReadOnlyList<IReadOnlyList<string>> ParseCsv(string input,
         CancellationToken cancellationToken = default)
