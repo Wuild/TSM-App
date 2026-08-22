@@ -281,8 +281,17 @@
           <Grid IsVisible="{Binding IsAuctionHouseSelected}" RowDefinitions="Auto,*">
             <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
                     Padding="12,8">
-              <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,230,130,Auto,Auto,Auto" ColumnSpacing="10">
-                <TextBox Text="{Binding AuctionSearchText}" PlaceholderText="Search item name or ID…" />
+              <Grid ColumnDefinitions="*,230,130,Auto,Auto" ColumnSpacing="10">
+                <Grid>
+                  <TextBox Text="{Binding AuctionSearchText}" PlaceholderText="Search item name or ID…"
+                           Padding="10,0,38,0" />
+                  <Button Classes="icon" Width="28" Height="28" Margin="0,0,3,0"
+                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                          Command="{Binding ClearAuctionSearchCommand}"
+                          IsVisible="{Binding HasAuctionSearchText}" ToolTip.Tip="Clear search">
+                    <lucide:LucideIcon Kind="X" Size="14" StrokeWidth="1.8" />
+                  </Button>
+                </Grid>
                 <ComboBox Grid.Column="1" ItemsSource="{Binding AuctionRealmOptions}"
                           SelectedItem="{Binding SelectedAuctionRealm}" PlaceholderText="All realms"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
@@ -297,49 +306,10 @@
                     <TextBlock Text="{Binding AuctionFavoritesLabel}" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <Button Grid.Column="4" Command="{Binding ToggleAdvancedAuctionSearchCommand}"
-                        Padding="11,0" ToolTip.Tip="Filter by item category, subcategory, and quality">
-                  <StackPanel Orientation="Horizontal" Spacing="7">
-                    <lucide:LucideIcon Kind="ListFilter" Size="15" StrokeWidth="1.8" VerticalAlignment="Center" />
-                    <TextBlock Text="Advanced" VerticalAlignment="Center" />
-                  </StackPanel>
-                </Button>
-                <Button Grid.Column="5" Classes="icon" Command="{Binding RefreshAuctionIndexCommand}"
+                <Button Grid.Column="4" Classes="icon" Command="{Binding RefreshAuctionIndexCommand}"
                         ToolTip.Tip="Rebuild local auction index">
                   <lucide:LucideIcon Kind="RefreshCw" Size="16" StrokeWidth="1.8" />
                 </Button>
-                <Grid Grid.Row="1" Grid.ColumnSpan="6" Margin="0,10,0,2"
-                      RowDefinitions="Auto,Auto" ColumnDefinitions="*,*,*,Auto" ColumnSpacing="10"
-                      IsVisible="{Binding IsAdvancedAuctionSearchOpen}">
-                  <StackPanel Spacing="5">
-                    <TextBlock Text="CATEGORY" Classes="field-label" />
-                    <ComboBox ItemsSource="{Binding AuctionCategoryOptions}"
-                              SelectedItem="{Binding SelectedAuctionCategory}"
-                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="1" Spacing="5">
-                    <TextBlock Text="SUBCATEGORY" Classes="field-label" />
-                    <ComboBox ItemsSource="{Binding AuctionSubcategoryOptions}"
-                              SelectedItem="{Binding SelectedAuctionSubcategory}"
-                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
-                  </StackPanel>
-                  <StackPanel Grid.Column="2" Spacing="5">
-                    <TextBlock Text="QUALITY" Classes="field-label" />
-                    <ComboBox ItemsSource="{Binding AuctionQualityOptions}"
-                              SelectedItem="{Binding SelectedAuctionQuality}"
-                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
-                  </StackPanel>
-                  <Button Grid.Column="3" Command="{Binding ClearAdvancedAuctionSearchCommand}"
-                          VerticalAlignment="Bottom" Padding="12,0" Content="Clear" />
-                  <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Margin="0,6,0,0"
-                              Orientation="Horizontal" Spacing="7"
-                              IsHitTestVisible="False">
-                    <ProgressBar Width="74" Height="2" IsIndeterminate="True"
-                                 IsVisible="{Binding IsAuctionMetadataLoading}" />
-                    <TextBlock Text="{Binding AuctionMetadataStatus}" Classes="muted" FontSize="9"
-                               VerticalAlignment="Center" />
-                  </StackPanel>
-                </Grid>
               </Grid>
             </Border>
             <Grid x:Name="AuctionWorkspace" Grid.Row="1" SizeChanged="AuctionWorkspaceSizeChanged">
@@ -347,7 +317,7 @@
               <Grid RowDefinitions="38,*,Auto">
                 <Border Background="#202020" BorderBrush="{StaticResource BorderBrush}"
                         BorderThickness="0,0,0,1" Padding="16,0">
-                  <Grid ColumnDefinitions="2.1*,1.05*,.65*,1.05*,1.05*,.8*,.75*">
+                  <Grid ColumnDefinitions="2.2*,1.05*,1.05*,1.05*,.8*,.75*">
                     <Button Classes="sort-header" Command="{Binding SortAuctionItemCommand}">
                       <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <TextBlock Text="ITEM" Classes="field-label" />
@@ -360,32 +330,26 @@
                         <TextBlock Text="{Binding AuctionMinBuyoutSortIndicator}" Classes="sort-arrow" />
                       </StackPanel>
                     </Button>
-                    <Button Grid.Column="2" Classes="sort-header" Command="{Binding SortAuctionCountCommand}">
-                      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <TextBlock Text="AUCTIONS" Classes="field-label" />
-                        <TextBlock Text="{Binding AuctionCountSortIndicator}" Classes="sort-arrow" />
-                      </StackPanel>
-                    </Button>
-                    <Button Grid.Column="3" Classes="sort-header" Command="{Binding SortAuctionRecentCommand}">
+                    <Button Grid.Column="2" Classes="sort-header" Command="{Binding SortAuctionRecentCommand}">
                       <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <TextBlock Text="RECENT VALUE" Classes="field-label" />
                         <TextBlock Text="{Binding AuctionRecentSortIndicator}" Classes="sort-arrow" />
                       </StackPanel>
                     </Button>
-                    <Button Grid.Column="4" Classes="sort-header" Command="{Binding SortAuctionHistoricalCommand}">
+                    <Button Grid.Column="3" Classes="sort-header" Command="{Binding SortAuctionHistoricalCommand}">
                       <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <TextBlock Text="HISTORICAL" Classes="field-label" />
                         <TextBlock Text="{Binding AuctionHistoricalSortIndicator}" Classes="sort-arrow" />
                       </StackPanel>
                     </Button>
-                    <Button Grid.Column="5" Classes="sort-header" Command="{Binding SortAuctionSoldPerDayCommand}"
+                    <Button Grid.Column="4" Classes="sort-header" Command="{Binding SortAuctionSoldPerDayCommand}"
                             ToolTip.Tip="Estimated items sold per day across the selected region">
                       <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                         <TextBlock Text="SOLD/DAY" Classes="field-label" />
                         <TextBlock Text="{Binding AuctionSoldPerDaySortIndicator}" Classes="sort-arrow" />
                       </StackPanel>
                     </Button>
-                    <Button Grid.Column="6" Classes="sort-header" Command="{Binding SortAuctionSaleRateCommand}"
+                    <Button Grid.Column="5" Classes="sort-header" Command="{Binding SortAuctionSaleRateCommand}"
                             ToolTip.Tip="Regional percentage of posted auctions which sell">
                       <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                         <TextBlock Text="SALE RATE" Classes="field-label" />
@@ -405,9 +369,8 @@
                       <DataTemplate>
                         <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="16,11"
                                 Tag="{Binding}" AttachedToVisualTree="AuctionRowAttached"
-                                DetachedFromVisualTree="AuctionRowDetached"
-                                PointerEntered="AuctionRowPointerEntered" PointerExited="AuctionRowPointerExited">
-                          <Grid ColumnDefinitions="2.1*,1.05*,.65*,1.05*,1.05*,.8*,.75*">
+                                DetachedFromVisualTree="AuctionRowDetached">
+                          <Grid ColumnDefinitions="2.2*,1.05*,1.05*,1.05*,.8*,.75*">
                             <Grid ColumnDefinitions="28,36,*" ColumnSpacing="7">
                               <Button Classes="icon" Width="28" Height="28" MinHeight="28" Padding="0"
                                       VerticalAlignment="Center" Click="ToggleAuctionFavorite"
@@ -437,22 +400,21 @@
                               <Run Text="{Binding MinBuyoutParts.Silver}" Foreground="#C7CED6" />
                               <Run Text="{Binding MinBuyoutParts.Copper}" Foreground="#C77C43" />
                             </TextBlock>
-                            <TextBlock Grid.Column="2" Text="{Binding AuctionsDisplay}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="3" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="2" VerticalAlignment="Center">
                               <Run Text="{Binding MarketValueParts.Empty}" Foreground="#737A81" />
                               <Run Text="{Binding MarketValueParts.Gold}" Foreground="#FFD100" />
                               <Run Text="{Binding MarketValueParts.Silver}" Foreground="#C7CED6" />
                               <Run Text="{Binding MarketValueParts.Copper}" Foreground="#C77C43" />
                             </TextBlock>
-                            <TextBlock Grid.Column="4" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="3" VerticalAlignment="Center">
                               <Run Text="{Binding HistoricalParts.Empty}" Foreground="#737A81" />
                               <Run Text="{Binding HistoricalParts.Gold}" Foreground="#FFD100" />
                               <Run Text="{Binding HistoricalParts.Silver}" Foreground="#C7CED6" />
                               <Run Text="{Binding HistoricalParts.Copper}" Foreground="#C77C43" />
                             </TextBlock>
-                            <TextBlock Grid.Column="5" Text="{Binding RegionSoldPerDayDisplay}"
+                            <TextBlock Grid.Column="4" Text="{Binding RegionSoldPerDayDisplay}"
                                        VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="6" Text="{Binding RegionSaleRateDisplay}"
+                            <TextBlock Grid.Column="5" Text="{Binding RegionSaleRateDisplay}"
                                        VerticalAlignment="Center" />
                           </Grid>
                         </Border>

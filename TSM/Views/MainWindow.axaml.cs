@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Input;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -14,7 +13,6 @@ namespace TSM.Views;
 public sealed partial class MainWindow : Window
 {
     private bool _exitConfirmationOpen;
-    private CancellationTokenSource? _auctionHoverDelay;
     private double _normalWindowWidth = 1200;
     private double _normalWindowHeight = 780;
     private PixelPoint? _normalWindowPosition;
@@ -193,9 +191,6 @@ public sealed partial class MainWindow : Window
     private async void DisposeViewModel(object? sender, EventArgs e)
     {
         _placementSaveTimer.Stop();
-        _auctionHoverDelay?.Cancel();
-        _auctionHoverDelay?.Dispose();
-        _auctionHoverDelay = null;
         if (DataContext is MainWindowViewModel viewModel)
             await viewModel.DisposeAsync();
     }
@@ -395,37 +390,8 @@ public sealed partial class MainWindow : Window
 
     private void AuctionRowDetached(object? sender, VisualTreeAttachmentEventArgs e)
     {
-        CancelAuctionRowHover(sender);
         SetAuctionRowVisibility(sender, false);
     }
-
-    private async void AuctionRowPointerEntered(object? sender, PointerEventArgs e)
-    {
-        if (sender is not Control { Tag: AuctionHouseItemViewModel item } row ||
-            DataContext is not MainWindowViewModel viewModel)
-            return;
-        _auctionHoverDelay?.Cancel();
-        _auctionHoverDelay?.Dispose();
-        var cancellation = new CancellationTokenSource();
-        _auctionHoverDelay = cancellation;
-        try
-        {
-            await Task.Delay(220, cancellation.Token);
-            if (!cancellation.IsCancellationRequested && row.IsPointerOver)
-                viewModel.SetAuctionItemHovered(item, true);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            if (ReferenceEquals(_auctionHoverDelay, cancellation))
-                _auctionHoverDelay = null;
-            cancellation.Dispose();
-        }
-    }
-
-    private void AuctionRowPointerExited(object? sender, PointerEventArgs e) => CancelAuctionRowHover(sender);
 
     private void ToggleAuctionFavorite(object? sender, RoutedEventArgs e)
     {
@@ -436,14 +402,6 @@ public sealed partial class MainWindow : Window
             return;
         viewModel.ToggleAuctionFavorite(item);
         e.Handled = true;
-    }
-
-    private void CancelAuctionRowHover(object? sender)
-    {
-        _auctionHoverDelay?.Cancel();
-        if (sender is Control { Tag: AuctionHouseItemViewModel item } &&
-            DataContext is MainWindowViewModel viewModel)
-            viewModel.SetAuctionItemHovered(item, false);
     }
 
     private void SetAuctionRowVisibility(object? sender, bool isVisible)

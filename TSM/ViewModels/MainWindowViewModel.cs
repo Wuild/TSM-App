@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Collections.ObjectModel;
 using System.Text.Json;
@@ -19,7 +18,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     {
         Item,
         MinBuyout,
-        Auctions,
         Recent,
         Historical,
         SoldPerDay,
@@ -85,15 +83,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _auctionSearchText = string.Empty;
     private string? _selectedAuctionRealm;
     private string _selectedAuctionFaction = "Both";
-    private bool _isAdvancedAuctionSearchOpen;
-    private string _selectedAuctionCategory = "All categories";
-    private string _selectedAuctionSubcategory = "All subcategories";
-    private string _selectedAuctionQuality = "All qualities";
-    private string _auctionMetadataStatus = "Item categories and quality are loaded from Wowhead when needed.";
-    private bool _isAuctionMetadataLoading;
     private string _auctionResultSummary = "No auction data has been indexed yet.";
     private AuctionHouseItemViewModel? _selectedAuctionItem;
-    private AuctionHouseItemViewModel? _hoveredAuctionItem;
     private bool _isCheckingForUpdates;
     private string _updateStatus = "Updates have not been checked yet.";
     private GitHubAppUpdate? _availableAppUpdate;
@@ -105,10 +96,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private readonly SemaphoreSlim _auctionIconSlots = new(4, 4);
     private CancellationTokenSource? _auctionSearchCancellation;
     private Task? _auctionSearchRunner;
-    private CancellationTokenSource? _auctionMetadataCancellation;
-    private Task? _auctionMetadataRunner;
-    private readonly ConcurrentDictionary<string, AuctionItemClassification> _auctionClassifications =
-        new(StringComparer.OrdinalIgnoreCase);
     private AuctionSortColumn _auctionSortColumn = AuctionSortColumn.Item;
     private bool _auctionSortDescending;
     private bool _showAuctionFavoritesOnly;
@@ -188,11 +175,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         ShowAuctionHouseCommand = new DelegateCommand(() => ShowContentPage(3));
         RefreshAuctionIndexCommand = new DelegateCommand(LoadAuctionIndex);
         ToggleAuctionFavoritesFilterCommand = new DelegateCommand(ToggleAuctionFavoritesFilter);
-        ToggleAdvancedAuctionSearchCommand = new DelegateCommand(ToggleAdvancedAuctionSearch);
-        ClearAdvancedAuctionSearchCommand = new DelegateCommand(ClearAdvancedAuctionSearch);
+        ClearAuctionSearchCommand = new DelegateCommand(ClearAuctionSearch);
         SortAuctionItemCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.Item));
         SortAuctionMinBuyoutCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.MinBuyout));
-        SortAuctionCountCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.Auctions));
         SortAuctionRecentCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.Recent));
         SortAuctionHistoricalCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.Historical));
         SortAuctionSoldPerDayCommand = new DelegateCommand(() => ToggleAuctionSort(AuctionSortColumn.SoldPerDay));
@@ -243,9 +228,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     }
     public ObservableCollection<string> AuctionRealmOptions { get; } = [];
     public IReadOnlyList<string> AuctionFactionOptions { get; } = ["Alliance", "Horde", "Both"];
-    public IReadOnlyList<string> AuctionCategoryOptions => WowItemTaxonomy.CategoryOptions;
-    public ObservableCollection<string> AuctionSubcategoryOptions { get; } = ["All subcategories"];
-    public IReadOnlyList<string> AuctionQualityOptions => WowItemTaxonomy.QualityOptions;
     public IReadOnlyList<string> ReleaseChannels { get; } = ["Release", "Beta"];
     public IReadOnlyList<int> UpdateCheckIntervals { get; } = [1, 3, 6, 12, 24, 48, 168];
     public IReadOnlyList<ThirdPartyLicense> ThirdPartyLicenses { get; } =
@@ -511,10 +493,13 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         get => _auctionSearchText;
         set
         {
-            if (SetProperty(ref _auctionSearchText, value))
-                QueueAuctionSearch(debounce: true);
+            if (!SetProperty(ref _auctionSearchText, value))
+                return;
+            OnPropertyChanged(nameof(HasAuctionSearchText));
+            QueueAuctionSearch(debounce: true);
         }
     }
+    public bool HasAuctionSearchText => !string.IsNullOrWhiteSpace(AuctionSearchText);
     public string? SelectedAuctionRealm
     {
         get => _selectedAuctionRealm;
@@ -533,60 +518,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 QueueAuctionSearch();
         }
     }
-    public bool IsAdvancedAuctionSearchOpen
-    {
-        get => _isAdvancedAuctionSearchOpen;
-        private set => SetProperty(ref _isAdvancedAuctionSearchOpen, value);
-    }
-    public string SelectedAuctionCategory
-    {
-        get => _selectedAuctionCategory;
-        set
-        {
-            value ??= "All categories";
-            if (!SetProperty(ref _selectedAuctionCategory, value))
-                return;
-            AuctionSubcategoryOptions.Clear();
-            foreach (var option in WowItemTaxonomy.SubcategoryOptions(value))
-                AuctionSubcategoryOptions.Add(option);
-            _selectedAuctionSubcategory = "All subcategories";
-            OnPropertyChanged(nameof(SelectedAuctionSubcategory));
-            QueueAuctionSearch();
-            StartAuctionMetadataEnrichment();
-        }
-    }
-    public string SelectedAuctionSubcategory
-    {
-        get => _selectedAuctionSubcategory;
-        set
-        {
-            value ??= "All subcategories";
-            if (SetProperty(ref _selectedAuctionSubcategory, value))
-                QueueAuctionSearch();
-        }
-    }
-    public string SelectedAuctionQuality
-    {
-        get => _selectedAuctionQuality;
-        set
-        {
-            value ??= "All qualities";
-            if (!SetProperty(ref _selectedAuctionQuality, value))
-                return;
-            QueueAuctionSearch();
-            StartAuctionMetadataEnrichment();
-        }
-    }
-    public string AuctionMetadataStatus
-    {
-        get => _auctionMetadataStatus;
-        private set => SetProperty(ref _auctionMetadataStatus, value);
-    }
-    public bool IsAuctionMetadataLoading
-    {
-        get => _isAuctionMetadataLoading;
-        private set => SetProperty(ref _isAuctionMetadataLoading, value);
-    }
     public string AuctionResultSummary
     {
         get => _auctionResultSummary;
@@ -594,7 +525,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     }
     public string AuctionItemSortIndicator => SortIndicator(AuctionSortColumn.Item);
     public string AuctionMinBuyoutSortIndicator => SortIndicator(AuctionSortColumn.MinBuyout);
-    public string AuctionCountSortIndicator => SortIndicator(AuctionSortColumn.Auctions);
     public string AuctionRecentSortIndicator => SortIndicator(AuctionSortColumn.Recent);
     public string AuctionHistoricalSortIndicator => SortIndicator(AuctionSortColumn.Historical);
     public string AuctionSoldPerDaySortIndicator => SortIndicator(AuctionSortColumn.SoldPerDay);
@@ -622,15 +552,14 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             OnPropertyChanged(nameof(AuctionItemDrawerItem));
             OnPropertyChanged(nameof(IsAuctionItemDrawerOpen));
             OpenAuctionItemInWowheadCommand.RaiseCanExecuteChanged();
-            if (previous is not null && !ReferenceEquals(_hoveredAuctionItem, previous) &&
-                !_visibleAuctionItems.Contains(previous) &&
+            if (previous is not null && !_visibleAuctionItems.Contains(previous) &&
                 _auctionIconLoads.TryGetValue(previous, out var previousCancellation))
                 previousCancellation.Cancel();
             if (value is not null)
                 StartAuctionIconLoad(value);
         }
     }
-    public AuctionHouseItemViewModel? AuctionItemDrawerItem => _hoveredAuctionItem ?? SelectedAuctionItem;
+    public AuctionHouseItemViewModel? AuctionItemDrawerItem => SelectedAuctionItem;
     public bool IsAuctionItemDrawerOpen => AuctionItemDrawerItem is not null;
     public bool LoadOnlineItemIcons
     {
@@ -641,15 +570,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 return;
             Settings.LoadOnlineItemIcons = value;
             OnPropertyChanged();
-            if (!value)
-            {
-                _auctionMetadataCancellation?.Cancel();
-                AuctionMetadataStatus = "Online item metadata enrichment is disabled in Settings.";
-            }
-            else if (IsAdvancedAuctionSearchOpen)
-            {
-                StartAuctionMetadataEnrichment();
-            }
             QueueAuctionSearch();
         }
     }
@@ -718,11 +638,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public DelegateCommand ShowAuctionHouseCommand { get; }
     public DelegateCommand RefreshAuctionIndexCommand { get; }
     public DelegateCommand ToggleAuctionFavoritesFilterCommand { get; }
-    public DelegateCommand ToggleAdvancedAuctionSearchCommand { get; }
-    public DelegateCommand ClearAdvancedAuctionSearchCommand { get; }
+    public DelegateCommand ClearAuctionSearchCommand { get; }
     public DelegateCommand SortAuctionItemCommand { get; }
     public DelegateCommand SortAuctionMinBuyoutCommand { get; }
-    public DelegateCommand SortAuctionCountCommand { get; }
     public DelegateCommand SortAuctionRecentCommand { get; }
     public DelegateCommand SortAuctionHistoricalCommand { get; }
     public DelegateCommand SortAuctionSoldPerDayCommand { get; }
@@ -816,7 +734,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             _updateCheckCancellation?.Cancel();
             _auctionSearchCancellation?.Cancel();
-            _auctionMetadataCancellation?.Cancel();
             CancelAuctionIconLoading();
             SelectedAuctionItem = null;
             foreach (var item in AuctionResults)
@@ -1373,8 +1290,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             await _auctionIconCancellation.CancelAsync();
         if (_updateCheckCancellation is not null)
             await _updateCheckCancellation.CancelAsync();
-        if (_auctionMetadataCancellation is not null)
-            await _auctionMetadataCancellation.CancelAsync();
         if (_updateCheckRunner is not null)
         {
             try
@@ -1395,20 +1310,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             {
             }
         }
-        if (_auctionMetadataRunner is not null)
-        {
-            try
-            {
-                await _auctionMetadataRunner;
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        }
         _updateCheckCancellation?.Dispose();
         _auctionIconCancellation?.Dispose();
         _auctionSearchCancellation?.Dispose();
-        _auctionMetadataCancellation?.Dispose();
         foreach (var item in AuctionResults)
             item.Dispose();
         _itemIconService.Dispose();
@@ -1672,7 +1576,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private void LoadAuctionIndex()
     {
-        _auctionMetadataCancellation?.Cancel();
         var previousRealm = SelectedAuctionRealm;
         try
         {
@@ -1689,8 +1592,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                                        string.Equals(option, previousRealm, StringComparison.OrdinalIgnoreCase))
                                    ?? AuctionRealmOptions.FirstOrDefault();
             QueueAuctionSearch();
-            if (IsAdvancedAuctionSearchOpen)
-                StartAuctionMetadataEnrichment();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
         {
@@ -1706,24 +1607,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    private void ToggleAdvancedAuctionSearch()
+    private void ClearAuctionSearch()
     {
-        IsAdvancedAuctionSearchOpen = !IsAdvancedAuctionSearchOpen;
-        if (IsAdvancedAuctionSearchOpen)
-            StartAuctionMetadataEnrichment();
-    }
-
-    private void ClearAdvancedAuctionSearch()
-    {
-        _selectedAuctionCategory = "All categories";
-        _selectedAuctionSubcategory = "All subcategories";
-        _selectedAuctionQuality = "All qualities";
-        AuctionSubcategoryOptions.Clear();
-        AuctionSubcategoryOptions.Add("All subcategories");
-        OnPropertyChanged(nameof(SelectedAuctionCategory));
-        OnPropertyChanged(nameof(SelectedAuctionSubcategory));
-        OnPropertyChanged(nameof(SelectedAuctionQuality));
-        QueueAuctionSearch();
+        AuctionSearchText = string.Empty;
     }
 
     private void ToggleAuctionFavoritesFilter()
@@ -1765,86 +1651,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         QueueAuctionSearch();
     }
 
-    private void StartAuctionMetadataEnrichment()
-    {
-        if (_auctionIndex.Count == 0 || _auctionMetadataRunner is { IsCompleted: false })
-            return;
-        if (!LoadOnlineItemIcons)
-        {
-            AuctionMetadataStatus = "Online item metadata enrichment is disabled in Settings.";
-            return;
-        }
-        _auctionMetadataCancellation?.Dispose();
-        _auctionMetadataCancellation = new CancellationTokenSource();
-        var uniqueItems = _auctionIndex
-            .GroupBy(ClassificationKey, StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.First())
-            .Where(item => !_auctionClassifications.ContainsKey(ClassificationKey(item)))
-            .ToArray();
-        if (uniqueItems.Length == 0)
-        {
-            AuctionMetadataStatus = $"Advanced item details ready · {_auctionClassifications.Count:N0} cached";
-            return;
-        }
-        IsAuctionMetadataLoading = true;
-        AuctionMetadataStatus = $"Loading item categories and quality · 0 of {uniqueItems.Length:N0}";
-        _auctionMetadataRunner = EnrichAuctionMetadataAsync(uniqueItems, _auctionMetadataCancellation.Token);
-    }
-
-    private async Task EnrichAuctionMetadataAsync(IReadOnlyList<AuctionHouseItemRow> items,
-        CancellationToken cancellationToken)
-    {
-        var completed = 0;
-        try
-        {
-            await Parallel.ForEachAsync(items,
-                new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken },
-                async (item, token) =>
-                {
-                    try
-                    {
-                        var classification = await _itemIconService.GetClassificationAsync(item.BaseItemString,
-                            item.Flavor, token);
-                        if (classification is not null)
-                            _auctionClassifications[ClassificationKey(item)] = classification;
-                    }
-                    catch (Exception exception) when (exception is HttpRequestException or IOException or JsonException or
-                                                       ArgumentException or UnauthorizedAccessException)
-                    {
-                    }
-
-                    var current = Interlocked.Increment(ref completed);
-                    if (current % 100 == 0 || current == items.Count)
-                    {
-                        await Dispatcher.UIThread.InvokeAsync(() =>
-                        {
-                            AuctionMetadataStatus =
-                                $"Loading item categories and quality · {current:N0} of {items.Count:N0}";
-                            if (HasAdvancedAuctionFilter)
-                                QueueAuctionSearch();
-                        });
-                    }
-                });
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                AuctionMetadataStatus = $"Advanced item details ready · {_auctionClassifications.Count:N0} cached";
-                QueueAuctionSearch();
-            });
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        finally
-        {
-            await Dispatcher.UIThread.InvokeAsync(() => IsAuctionMetadataLoading = false);
-        }
-    }
-
-    private bool HasAdvancedAuctionFilter =>
-        !string.Equals(SelectedAuctionCategory, "All categories", StringComparison.OrdinalIgnoreCase) ||
-        !string.Equals(SelectedAuctionSubcategory, "All subcategories", StringComparison.OrdinalIgnoreCase) ||
-        !string.Equals(SelectedAuctionQuality, "All qualities", StringComparison.OrdinalIgnoreCase);
-
     private static string ClassificationKey(AuctionHouseItemRow item) =>
         $"{item.Flavor}|{item.BaseItemString}";
 
@@ -1874,20 +1680,17 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         var realm = SelectedAuctionRealm;
         var faction = SelectedAuctionFaction;
         var searchText = AuctionSearchText;
-        var category = SelectedAuctionCategory;
-        var subcategory = SelectedAuctionSubcategory;
-        var quality = SelectedAuctionQuality;
         var favoritesOnly = ShowAuctionFavoritesOnly;
         var favoriteKeys = new HashSet<string>(_auctionFavoriteKeys, StringComparer.OrdinalIgnoreCase);
         var sortColumn = _auctionSortColumn;
         var sortDescending = _auctionSortDescending;
-        _auctionSearchRunner = RunAuctionSearchAsync(index, realm, faction, searchText, category, subcategory,
-            quality, favoritesOnly, favoriteKeys, sortColumn,
+        _auctionSearchRunner = RunAuctionSearchAsync(index, realm, faction, searchText,
+            favoritesOnly, favoriteKeys, sortColumn,
             sortDescending, debounce, cancellation);
     }
 
     private async Task RunAuctionSearchAsync(IReadOnlyList<AuctionHouseItemRow> index, string? realm,
-        string faction, string searchText, string category, string subcategory, string quality,
+        string faction, string searchText,
         bool favoritesOnly, IReadOnlySet<string> favoriteKeys,
         AuctionSortColumn sortColumn, bool sortDescending,
         bool debounce, CancellationTokenSource cancellation)
@@ -1896,8 +1699,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (debounce)
                 await Task.Delay(140, cancellation.Token);
-            var result = await Task.Run(() => FilterAuctionResults(index, realm, faction, searchText, category,
-                subcategory, quality, favoritesOnly, favoriteKeys, _auctionClassifications, sortColumn,
+            var result = await Task.Run(() => FilterAuctionResults(index, realm, faction, searchText,
+                favoritesOnly, favoriteKeys, sortColumn,
                 sortDescending, cancellation.Token),
                 cancellation.Token);
             await Dispatcher.UIThread.InvokeAsync(() =>
@@ -1918,19 +1721,14 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     }
 
     private static AuctionSearchResult FilterAuctionResults(IReadOnlyList<AuctionHouseItemRow> index,
-        string? selectedRealm, string selectedFaction, string searchText, string selectedCategory,
-        string selectedSubcategory, string selectedQuality,
+        string? selectedRealm, string selectedFaction, string searchText,
         bool favoritesOnly, IReadOnlySet<string> favoriteKeys,
-        IReadOnlyDictionary<string, AuctionItemClassification> classifications, AuctionSortColumn sortColumn,
-        bool sortDescending, CancellationToken cancellationToken)
+        AuctionSortColumn sortColumn, bool sortDescending, CancellationToken cancellationToken)
     {
         var filterRealm = !string.IsNullOrWhiteSpace(selectedRealm) &&
                           !string.Equals(selectedRealm, "All realms", StringComparison.OrdinalIgnoreCase);
         var searchTerms = searchText.Split(' ',
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var filtersCategory = !string.Equals(selectedCategory, "All categories", StringComparison.OrdinalIgnoreCase);
-        var filtersSubcategory = !string.Equals(selectedSubcategory, "All subcategories", StringComparison.OrdinalIgnoreCase);
-        var filtersQuality = !string.Equals(selectedQuality, "All qualities", StringComparison.OrdinalIgnoreCase);
         var groups = new Dictionary<(string Flavor, string ItemString), List<AuctionHouseItemRow>>();
         for (var itemIndex = 0; itemIndex < index.Count; itemIndex++)
         {
@@ -1949,12 +1747,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                     !item.ItemString.Contains(term, StringComparison.OrdinalIgnoreCase)))
                 continue;
             if (favoritesOnly && !favoriteKeys.Contains(ClassificationKey(item)))
-                continue;
-            if ((filtersCategory || filtersSubcategory || filtersQuality) &&
-                (!classifications.TryGetValue(ClassificationKey(item), out var classification) ||
-                 filtersCategory && !string.Equals(classification.Category, selectedCategory, StringComparison.OrdinalIgnoreCase) ||
-                 filtersSubcategory && !string.Equals(classification.Subcategory, selectedSubcategory, StringComparison.OrdinalIgnoreCase) ||
-                 filtersQuality && !string.Equals(classification.QualityName, selectedQuality, StringComparison.OrdinalIgnoreCase)))
                 continue;
             var key = (item.Flavor.ToUpperInvariant(), item.BaseItemString);
             if (!groups.TryGetValue(key, out var variants))
@@ -1994,7 +1786,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
         OnPropertyChanged(nameof(AuctionItemSortIndicator));
         OnPropertyChanged(nameof(AuctionMinBuyoutSortIndicator));
-        OnPropertyChanged(nameof(AuctionCountSortIndicator));
         OnPropertyChanged(nameof(AuctionRecentSortIndicator));
         OnPropertyChanged(nameof(AuctionHistoricalSortIndicator));
         OnPropertyChanged(nameof(AuctionSoldPerDaySortIndicator));
@@ -2037,7 +1828,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         Func<AuctionMatch, long?> value = column switch
         {
             AuctionSortColumn.MinBuyout => row => row.Summary.MinBuyout,
-            AuctionSortColumn.Auctions => row => row.Summary.NumAuctions,
             AuctionSortColumn.Recent => row => row.Summary.MarketValueRecent,
             AuctionSortColumn.Historical => row => row.Summary.Historical,
             AuctionSortColumn.SoldPerDay => row => row.Summary.RegionSoldPerDay,
@@ -2107,8 +1897,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private void ReplaceVisibleAuctionResults(int count)
     {
-        if (_hoveredAuctionItem is not null)
-            SetAuctionItemHovered(_hoveredAuctionItem, false);
         SelectedAuctionItem = null;
         CancelAuctionIconLoading();
         foreach (var item in AuctionResults)
@@ -2164,8 +1952,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             StartAuctionIconLoad(item);
         if (SelectedAuctionItem is not null)
             StartAuctionIconLoad(SelectedAuctionItem);
-        if (_hoveredAuctionItem is not null)
-            StartAuctionIconLoad(_hoveredAuctionItem);
     }
 
     public void SetAuctionItemVisible(AuctionHouseItemViewModel item, bool isVisible)
@@ -2178,35 +1964,14 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
 
         _visibleAuctionItems.Remove(item);
-        if (!ReferenceEquals(SelectedAuctionItem, item) && !ReferenceEquals(_hoveredAuctionItem, item) &&
+        if (!ReferenceEquals(SelectedAuctionItem, item) &&
             _auctionIconLoads.TryGetValue(item, out var cancellation))
             cancellation.Cancel();
     }
 
-    public void SetAuctionItemHovered(AuctionHouseItemViewModel item, bool isHovered)
-    {
-        var value = isHovered ? item : ReferenceEquals(_hoveredAuctionItem, item) ? null : _hoveredAuctionItem;
-        if (ReferenceEquals(_hoveredAuctionItem, value))
-            return;
-        _hoveredAuctionItem = value;
-        OnPropertyChanged(nameof(AuctionItemDrawerItem));
-        OnPropertyChanged(nameof(IsAuctionItemDrawerOpen));
-        OpenAuctionItemInWowheadCommand.RaiseCanExecuteChanged();
-        if (value is not null)
-            StartAuctionIconLoad(value);
-    }
-
     private void CloseAuctionItemDrawer()
     {
-        var hovered = _hoveredAuctionItem;
-        _hoveredAuctionItem = null;
         SelectedAuctionItem = null;
-        if (hovered is not null)
-        {
-            OnPropertyChanged(nameof(AuctionItemDrawerItem));
-            OnPropertyChanged(nameof(IsAuctionItemDrawerOpen));
-            OpenAuctionItemInWowheadCommand.RaiseCanExecuteChanged();
-        }
     }
 
     private void StartAuctionIconLoad(AuctionHouseItemViewModel item)
@@ -2230,7 +1995,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             var result = await _itemIconService.GetAsync(row.ItemString, row.Flavor, token);
             if (result is null)
                 return;
-            _auctionClassifications[ClassificationKey(row.Flavor, row.ItemString)] = result.Classification;
             var icon = await Task.Run(() => new Bitmap(result.Path), token);
             try
             {
@@ -2263,8 +2027,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 if (_auctionIconLoads.TryGetValue(row, out var current) && ReferenceEquals(current, cancellation))
                     _auctionIconLoads.Remove(row);
                 var shouldRestart = cancellation.IsCancellationRequested &&
-                                    (_visibleAuctionItems.Contains(row) || ReferenceEquals(SelectedAuctionItem, row) ||
-                                     ReferenceEquals(_hoveredAuctionItem, row));
+                                    (_visibleAuctionItems.Contains(row) || ReferenceEquals(SelectedAuctionItem, row));
                 cancellation.Dispose();
                 if (shouldRestart)
                     StartAuctionIconLoad(row);
