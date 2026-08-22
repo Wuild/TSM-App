@@ -6,7 +6,7 @@
         x:Class="TSM.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="TSM Desktop"
-        Icon="/Assets/tsm-app.ico"
+        Icon="/Assets/tsm-app.png"
         Width="1200" Height="780"
         MinWidth="1000" MinHeight="680"
         WindowStartupLocation="CenterScreen"

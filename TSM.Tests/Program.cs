@@ -19,6 +19,7 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("authenticates and differentially syncs AppData atomically", AuthenticateAndSyncAppData),
     ("syncs faction-qualified anniversary realm data", SyncFactionQualifiedRealm),
     ("discovers PTR client variants", Run(DiscoverPtrVariants)),
+    ("detects newly installed clients and changed local realm data", Run(DetectLocalInstallationChanges)),
     ("safely updates, reinstalls, and removes addons", UpdateInstalledAddon),
     ("runs automatic sync callbacks serially on a 30 minute cadence", AutomaticSyncCadence),
     ("selects the native GitHub update package", SelectNativeUpdatePackage),
@@ -395,6 +396,37 @@ static void DiscoverPtrVariants()
         var installations = new WowInstallationService().Discover(temporaryRoot);
         Assert(installations.Any(value => value.Name == "Retail PTR"), "Retail PTR was not discovered");
         Assert(installations.Any(value => value.Name == "Classic PTR"), "Classic PTR was not discovered");
+    }
+    finally
+    {
+        Directory.Delete(temporaryRoot, true);
+    }
+}
+
+static void DetectLocalInstallationChanges()
+{
+    var temporaryRoot = Path.Combine(Path.GetTempPath(), $"tsm-live-discovery-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(Path.Combine(temporaryRoot, "_retail_", "Interface", "AddOns"));
+    var service = new WowInstallationService();
+
+    try
+    {
+        var initial = service.GetDiscoveryFingerprint(temporaryRoot);
+        Directory.CreateDirectory(Path.Combine(temporaryRoot, "_classic_", "Interface", "AddOns"));
+        var withClient = service.GetDiscoveryFingerprint(temporaryRoot);
+        Assert(withClient != initial && withClient.Contains("Classic", StringComparison.Ordinal),
+            "new WoW client was not detected");
+
+        var savedVariables = Path.Combine(temporaryRoot, "_classic_", "WTF", "Account", "TEST",
+            "SavedVariables", "TradeSkillMaster.lua");
+        Directory.CreateDirectory(Path.GetDirectoryName(savedVariables)!);
+        File.WriteAllText(savedVariables, "TradeSkillMasterDB = { _scopeKeys = { realm = { 'FirstRealm' } } }");
+        var withAccount = service.GetDiscoveryFingerprint(temporaryRoot);
+        Assert(withAccount != withClient, "new local account and realm data were not detected");
+
+        File.AppendAllText(savedVariables, "\nNewRealmMarker = true");
+        var withRealmChange = service.GetDiscoveryFingerprint(temporaryRoot);
+        Assert(withRealmChange != withAccount, "changed local realm data were not detected");
     }
     finally
     {

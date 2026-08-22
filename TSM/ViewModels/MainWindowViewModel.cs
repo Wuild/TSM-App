@@ -43,6 +43,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private readonly DesktopNotificationService _notifications;
     private readonly GitHubUpdateService _appUpdates;
     private readonly DispatcherTimer _syncFreshnessTimer;
+    private readonly DispatcherTimer _localDiscoveryTimer;
     private readonly Dictionary<string, string> _knownAddonVersions = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<WowInstallation> _installations = [];
     private bool _isLoggedIn;
@@ -75,6 +76,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _addonManagementStatus = "Installed addons are checked during each data sync.";
     private bool _initialized;
     private bool _hasAddonBaseline;
+    private bool _isCheckingLocalDiscovery;
+    private string _localDiscoveryFingerprint = string.Empty;
     private IReadOnlyList<AuctionHouseItemRow> _auctionIndex = [];
     private IReadOnlyList<AuctionHouseItemViewModel> _auctionResults = [];
     private IReadOnlyList<AuctionMatch> _auctionMatches = [];
@@ -148,6 +151,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _syncFreshnessTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
         _syncFreshnessTimer.Tick += (_, _) => NotifySyncFreshnessChanged();
         _syncFreshnessTimer.Start();
+        _localDiscoveryTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _localDiscoveryTimer.Tick += DetectLocalChanges;
+        _localDiscoveryTimer.Start();
         if (Enum.TryParse<AuctionSortColumn>(settings.AuctionSortColumn, true, out var savedSortColumn) &&
             Enum.IsDefined(savedSortColumn))
             _auctionSortColumn = savedSortColumn;
@@ -1282,7 +1288,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         StatusDetail = "Checking for updated TSM realm data…";
         try
         {
-            var result = await _syncService.SyncAsync(_installations, AccountingAccounts,
+            var installations = _wowService.Discover(Settings.WowPath);
+            var accounts = _accountingService.FindAccounts(installations);
+            var result = await _syncService.SyncAsync(installations, accounts,
                 Settings.ReleaseChannel, cancellationToken);
             RefreshLocalData();
             ShowSyncNotifications(result);
@@ -1357,6 +1365,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _syncFreshnessTimer.Stop();
+        _localDiscoveryTimer.Stop();
+        _localDiscoveryTimer.Tick -= DetectLocalChanges;
         if (_auctionSearchCancellation is not null)
             await _auctionSearchCancellation.CancelAsync();
         if (_auctionIconCancellation is not null)
@@ -1568,7 +1578,41 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    private void RefreshLocalData()
+    private async void DetectLocalChanges(object? sender, EventArgs e)
+    {
+        if (_isCheckingLocalDiscovery || IsBusy || string.IsNullOrWhiteSpace(Settings.WowPath))
+            return;
+        _isCheckingLocalDiscovery = true;
+        try
+        {
+            var fingerprint = await Task.Run(() => _wowService.GetDiscoveryFingerprint(Settings.WowPath));
+            if (string.Equals(fingerprint, _localDiscoveryFingerprint, StringComparison.Ordinal))
+                return;
+            RefreshLocalData(false);
+            StatusDetail = "Detected changes to installed WoW clients, addons, or local realms";
+            if (IsLoggedIn)
+            {
+                IsBusy = true;
+                try
+                {
+                    await SyncDataAsync();
+                }
+                finally
+                {
+                    IsBusy = false;
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+        finally
+        {
+            _isCheckingLocalDiscovery = false;
+        }
+    }
+
+    private void RefreshLocalData(bool refreshAuctionIndex = true)
     {
         _installations = _wowService.Discover(Settings.WowPath);
         RealmStatuses.Clear();
@@ -1603,13 +1647,15 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
         LoadAccountingAccounts();
         LoadRealmDataStatuses();
-        LoadAuctionIndex();
+        if (refreshAuctionIndex)
+            LoadAuctionIndex();
 
         if (_installations.Count > 0)
         {
             HeaderText = "Local game data connected";
             StatusDetail = $"{_installations.Count} client(s), {AddonStatuses.Count} addon folder(s), {RealmStatuses.Count} realm(s)";
         }
+        _localDiscoveryFingerprint = _wowService.GetDiscoveryFingerprint(Settings.WowPath);
         CheckAddonUpdatesCommand.RaiseCanExecuteChanged();
     }
 

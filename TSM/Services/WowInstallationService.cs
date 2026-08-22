@@ -33,6 +33,36 @@ public sealed partial class WowInstallationService
 
     public bool IsValidRoot(string? root) => !string.IsNullOrWhiteSpace(root) && Discover(root).Count > 0;
 
+    public string GetDiscoveryFingerprint(string? root)
+    {
+        var parts = new List<string>();
+        foreach (var installation in Discover(root).OrderBy(value => value.RootPath, StringComparer.OrdinalIgnoreCase))
+        {
+            parts.Add($"client:{installation.Name}:{Path.GetFullPath(installation.RootPath)}");
+            AddDirectoryEntries(parts, installation.SavedVariablesRoot, "account", directory =>
+            {
+                var savedVariables = Path.Combine(directory, "SavedVariables", "TradeSkillMaster.lua");
+                return File.Exists(savedVariables) ? savedVariables : null;
+            });
+            AddDirectoryEntries(parts, installation.AddOnsPath, "addon", directory =>
+            {
+                var name = Path.GetFileName(directory);
+                if (!name.StartsWith("TradeSkillMaster", StringComparison.OrdinalIgnoreCase))
+                    return null;
+                try
+                {
+                    return Directory.EnumerateFiles(directory, "*.toc").Order(StringComparer.OrdinalIgnoreCase)
+                        .FirstOrDefault();
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    return null;
+                }
+            });
+        }
+        return string.Join('|', parts);
+    }
+
     public IReadOnlyList<WowInstallation> Discover(string? root)
     {
         var result = new List<WowInstallation>();
@@ -112,6 +142,35 @@ public sealed partial class WowInstallationService
         }
 
         return "Unknown";
+    }
+
+    private static void AddDirectoryEntries(
+        ICollection<string> parts,
+        string parent,
+        string prefix,
+        Func<string, string?> trackedFile)
+    {
+        if (!Directory.Exists(parent))
+            return;
+        string[] directories;
+        try
+        {
+            directories = Directory.EnumerateDirectories(parent)
+                .Order(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var directory in directories)
+        {
+            var file = trackedFile(directory);
+            if (file is null)
+                continue;
+            var info = new FileInfo(file);
+            parts.Add($"{prefix}:{Path.GetFileName(directory)}:{info.Length}:{info.LastWriteTimeUtc.Ticks}");
+        }
     }
 
     private static string? FindCaseInsensitivePath(string root, params string[] segments)

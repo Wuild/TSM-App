@@ -76,7 +76,7 @@ Credentials can be remembered through Windows Credential Manager, macOS Keychain
 
 ### Realm data
 
-The start page lists locally detected and account-managed realms with their WoW flavor and installation state. Use the ellipsis menu on a realm to synchronize or remove it. Authenticated data refresh runs every 30 minutes while the application is open, and the top bar shows the freshness of the last successful sync.
+The start page lists locally detected and account-managed realms with their WoW flavor and installation state. Use the ellipsis menu on a realm to synchronize or remove it. While running, the app checks the configured WoW directory every 30 seconds for newly installed game flavors, accounts, addons, and changed local realm data. Detected changes refresh the UI and trigger an authenticated data sync. The regular authenticated refresh also runs every 30 minutes, and the top bar shows the freshness of the last successful sync.
 
 ### Addons
 
