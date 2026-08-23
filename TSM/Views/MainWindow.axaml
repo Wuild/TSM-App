@@ -223,7 +223,7 @@
 
       <Grid Grid.Column="1" RowDefinitions="52,*">
         <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="14,0">
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="10">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
             <TextBlock Text="{Binding CurrentPageTitle}" FontSize="14" FontWeight="SemiBold"
                        Foreground="#EFEFEE" VerticalAlignment="Center" />
             <TextBlock Grid.Column="1" Text="{Binding StatusDetail}" Classes="muted" FontSize="10"
@@ -237,9 +237,7 @@
             </Border>
             <Button Grid.Column="3" Content="Add realm" Command="{Binding OpenSettingsCommand}"
                     IsVisible="{Binding IsRealmDataSelected}" />
-            <Button Grid.Column="4" Content="Close" Command="{Binding CloseSettingsCommand}"
-                    IsVisible="{Binding IsSettingsOpen}" />
-            <Button Grid.Column="5" Classes="icon" Command="{Binding RefreshCommand}"
+            <Button Grid.Column="4" Classes="icon" Command="{Binding RefreshCommand}"
                     IsEnabled="{Binding IsLoggedIn}" ToolTip.Tip="Refresh data">
               <lucide:LucideIcon Kind="RefreshCw" Size="16" StrokeWidth="1.8" />
             </Button>

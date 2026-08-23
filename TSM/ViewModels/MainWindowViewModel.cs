@@ -69,7 +69,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _logText = string.Empty;
     private string _logStatus = "Logs have not been loaded.";
     private int _selectedTab = 2;
-    private int _lastContentTab = 2;
     private TsmAccount? _selectedAccount;
     private string? _selectedRealm;
     private AccountingStatistics _accountingStatistics = AccountingStatistics.Empty;
@@ -210,7 +209,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         LoginCommand = new AsyncCommand(LoginAsync, () => !IsBusy);
         LogoutCommand = new AsyncCommand(LogoutAsync, () => !IsBusy);
         OpenSettingsCommand = new AsyncCommand(OpenSettingsAsync, () => !IsBusy);
-        CloseSettingsCommand = new DelegateCommand(CloseSettings);
         RefreshCommand = new AsyncCommand(RefreshAsync, () => !IsBusy);
         FindWowCommand = new DelegateCommand(FindWowPath);
         OnboardingBackCommand = new DelegateCommand(GoBackInOnboarding);
@@ -930,7 +928,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public AsyncCommand LoginCommand { get; }
     public AsyncCommand LogoutCommand { get; }
     public AsyncCommand OpenSettingsCommand { get; }
-    public DelegateCommand CloseSettingsCommand { get; }
     public AsyncCommand RefreshCommand { get; }
     public DelegateCommand FindWowCommand { get; }
     public DelegateCommand OnboardingBackCommand { get; }
@@ -1309,8 +1306,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private async Task OpenSettingsAsync()
     {
-        if (SelectedTab is >= 0 and <= 4)
-            _lastContentTab = SelectedTab;
         IsSettingsOpen = true;
         if (IsLoggedIn)
         {
@@ -1619,12 +1614,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             IsBusy = false;
         }
-    }
-
-    private void CloseSettings()
-    {
-        IsSettingsOpen = false;
-        SelectedTab = _lastContentTab;
     }
 
     private void SettingsChanged(object? sender, PropertyChangedEventArgs args)
