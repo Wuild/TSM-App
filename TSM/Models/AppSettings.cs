@@ -11,6 +11,8 @@ public sealed class AppSettings : ObservableObject
     private bool _startMinimized;
     private bool _minimizeToTray = true;
     private bool _confirmExit = true;
+    private bool _hardwareAcceleration = true;
+    private bool _preferNativeWayland = true;
     private bool _realmDataNotification = true;
     private bool _addonNotification = true;
     private bool _newsNotification = true;
@@ -51,6 +53,12 @@ public sealed class AppSettings : ObservableObject
     public bool StartMinimized { get => _startMinimized; set => SetProperty(ref _startMinimized, value); }
     public bool MinimizeToTray { get => _minimizeToTray; set => SetProperty(ref _minimizeToTray, value); }
     public bool ConfirmExit { get => _confirmExit; set => SetProperty(ref _confirmExit, value); }
+    public bool HardwareAcceleration { get => _hardwareAcceleration; set => SetProperty(ref _hardwareAcceleration, value); }
+    public bool PreferNativeWayland
+    {
+        get => _preferNativeWayland;
+        set => SetProperty(ref _preferNativeWayland, value);
+    }
     public bool RealmDataNotification { get => _realmDataNotification; set => SetProperty(ref _realmDataNotification, value); }
     public bool AddonNotification { get => _addonNotification; set => SetProperty(ref _addonNotification, value); }
     public bool NewsNotification { get => _newsNotification; set => SetProperty(ref _newsNotification, value); }
@@ -142,6 +150,8 @@ public sealed class AppSettings : ObservableObject
         StartMinimized = defaults.StartMinimized;
         MinimizeToTray = defaults.MinimizeToTray;
         ConfirmExit = defaults.ConfirmExit;
+        HardwareAcceleration = defaults.HardwareAcceleration;
+        PreferNativeWayland = defaults.PreferNativeWayland;
         RealmDataNotification = defaults.RealmDataNotification;
         AddonNotification = defaults.AddonNotification;
         NewsNotification = defaults.NewsNotification;

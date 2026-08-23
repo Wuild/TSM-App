@@ -46,7 +46,8 @@ public sealed partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void ShowWindowFromTray(object? sender, EventArgs e) => _mainWindow?.RestoreFromTray();
+    private void ShowWindowFromTray(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(() => _mainWindow?.RestoreFromTray());
 
     private void ActivateExistingWindow(object? sender, EventArgs e)
     {

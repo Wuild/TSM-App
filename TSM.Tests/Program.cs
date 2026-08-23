@@ -13,6 +13,7 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("discovers realms and reads Accounting statistics", Run(ReadAccountingStatistics)),
     ("indexes AppData metadata and derives local realm status", Run(IndexAppData)),
     ("persists onboarding and manually managed realm settings", Run(PersistManagedRealms)),
+    ("registers Linux startup using the desktop application id", Run(RegisterLinuxStartup)),
     ("restores application settings to their defaults", Run(ResetApplicationSettings)),
     ("round-trips remembered login through a credential store", Run(StoreRememberedLogin)),
     ("redirects second launches to the primary app instance", EnforceSingleInstance),
@@ -95,6 +96,8 @@ static void ResetApplicationSettings()
         WowPath = "/games/wow",
         RunAtStartup = true,
         MinimizeToTray = false,
+        HardwareAcceleration = false,
+        PreferNativeWayland = false,
         HasCompletedOnboarding = true,
         WindowWidth = 1777,
         WindowHeight = 999,
@@ -111,6 +114,8 @@ static void ResetApplicationSettings()
     var defaults = new AppSettings();
     Assert(settings.Email == defaults.Email && settings.WowPath == defaults.WowPath &&
            settings.RunAtStartup == defaults.RunAtStartup && settings.MinimizeToTray == defaults.MinimizeToTray &&
+           settings.HardwareAcceleration == defaults.HardwareAcceleration &&
+           settings.PreferNativeWayland == defaults.PreferNativeWayland &&
            settings.HasCompletedOnboarding == defaults.HasCompletedOnboarding &&
            settings.WindowWidth == defaults.WindowWidth && settings.WindowHeight == defaults.WindowHeight &&
            settings.WindowMaximized == defaults.WindowMaximized && settings.AuctionFavorites.Count == 0 &&
@@ -121,6 +126,34 @@ static void ResetApplicationSettings()
            settings.SelectedAuctionFaction == defaults.SelectedAuctionFaction &&
            settings.ManagedRealms.Count == 0,
         "one or more application preferences survived a full reset");
+}
+
+static void RegisterLinuxStartup()
+{
+    if (!OperatingSystem.IsLinux())
+        return;
+    var temporaryRoot = Path.Combine(Path.GetTempPath(), $"tsm-autostart-{Guid.NewGuid():N}");
+    var previousConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+    try
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", temporaryRoot);
+        var service = new StartupRegistrationService();
+        var registration = service.Apply(true);
+        Assert(Path.GetFileName(registration) == "com.wuild.TSMDesktop.desktop" && File.Exists(registration),
+            "the canonical Linux autostart entry was not created");
+        var contents = File.ReadAllText(registration);
+        Assert(contents.Contains("X-GNOME-Autostart-enabled=true", StringComparison.Ordinal) &&
+               contents.Contains("Exec=", StringComparison.Ordinal),
+            "the Linux autostart entry was incomplete");
+        service.Apply(false);
+        Assert(!File.Exists(registration), "the Linux autostart entry was not removed");
+    }
+    finally
+    {
+        Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", previousConfigHome);
+        if (Directory.Exists(temporaryRoot))
+            Directory.Delete(temporaryRoot, true);
+    }
 }
 
 static void ReadAccountingStatistics()
@@ -213,6 +246,8 @@ static void PersistManagedRealms()
             HasCompletedOnboarding = true,
             RunAtStartup = true,
             MinimizeToTray = false,
+            HardwareAcceleration = false,
+            PreferNativeWayland = false,
             AuctionSortColumn = "MinBuyout",
             AuctionSortDescending = true,
             AuctionFavorites = [new AuctionFavorite("Retail", "i:19019")],
@@ -237,6 +272,8 @@ static void PersistManagedRealms()
             "removed local realm tombstone did not survive settings reload");
         Assert(loaded.HasCompletedOnboarding && loaded.RunAtStartup && !loaded.MinimizeToTray,
             "onboarding desktop preferences did not survive settings reload");
+        Assert(!loaded.HardwareAcceleration, "rendering preference did not survive settings reload");
+        Assert(!loaded.PreferNativeWayland, "Wayland preference did not survive settings reload");
         Assert(loaded.AuctionSortColumn == "MinBuyout" && loaded.AuctionSortDescending,
             "auction sorting preference did not survive settings reload");
         Assert(loaded.AuctionFavorites.Single() == settings.AuctionFavorites.Single(),
@@ -752,6 +789,9 @@ static async Task AuthenticateAndSyncAppData()
         Assert(availableRealms.Count == 2 && availableRealms.Any(realm => realm.DisplayName == "Retail-US-Aegwynn") &&
                availableRealms.Any(realm => realm.DisplayName == "Progression-EU-Amnennar-Alliance"),
             "available realm list was not parsed");
+        handler.RealmPayload = """{"success":true,"data":[]}""";
+        Assert((await client.GetAvailableRealmsAsync()).Count == 0,
+            "an empty available-realm response was treated as a service error");
         var retailRealm = availableRealms.Single(realm => realm.GameVersion == "retail");
         var progressionRealm = availableRealms.Single(realm => realm.GameVersion == "bcc");
         await client.AddRealmAsync(retailRealm.GameVersion, retailRealm.Id);
@@ -1020,6 +1060,8 @@ static void Assert(bool condition, string message)
 
 sealed class FakeTsmHandler : HttpMessageHandler
 {
+    public string RealmPayload { get; set; } =
+        """{"data":{"retail":{"US":[{"realmId":123,"realmName":"Aegwynn"}]},"bcc":{"EU":[{"serverId":456,"name":"Amnennar-Alliance"}]}},"success":true}""";
     public int RequestCount { get; private set; }
     public int DataDownloadCount { get; private set; }
     public int AddonDownloadCount { get; private set; }
@@ -1068,7 +1110,7 @@ sealed class FakeTsmHandler : HttpMessageHandler
         }
 
         if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath == "/v2/realms2/list")
-            return Json("""{"retail":[{"id":123,"name":"Aegwynn","region":"US"}],"bcc":[{"id":456,"name":"Amnennar-Alliance","region":"EU"}],"success":true}""");
+            return Json(RealmPayload);
 
         if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath == "/v2/realms2/add/retail/123")
         {

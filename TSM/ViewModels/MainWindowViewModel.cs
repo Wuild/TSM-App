@@ -46,6 +46,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private readonly DispatcherTimer _syncFreshnessTimer;
     private readonly DispatcherTimer _localDiscoveryTimer;
     private readonly DispatcherTimer _accountingFileChangeTimer;
+    private readonly DispatcherTimer _settingsApplyTimer;
     private readonly List<FileSystemWatcher> _accountingFileWatchers = [];
     private readonly Dictionary<string, string> _knownAddonVersions = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<WowInstallation> _installations = [];
@@ -53,6 +54,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private bool _isSettingsOpen;
     private bool _isOnboardingVisible;
     private bool _isInitializing = true;
+    private bool _suppressSettingsPersistence;
     private int _onboardingStep;
     private string _onboardingWowStatus = string.Empty;
     private bool _isBusy;
@@ -61,6 +63,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _loginStatus = string.Empty;
     private string _headerText = "Sign in required";
     private string _statusDetail = "Connect a TradeSkillMaster account to continue";
+    private string _startupRegistrationStatus = string.Empty;
     private BackupEntry? _selectedBackup;
     private string _backupStatus = "Backups have not been loaded.";
     private string _logText = string.Empty;
@@ -178,6 +181,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _backupService = backupService;
         _logService = logService;
         Settings = settings;
+        Settings.PropertyChanged += SettingsChanged;
         _selectedAccountingPlayer = settings.SelectedAccountingPlayer;
         _selectedAuctionRealm = settings.SelectedAuctionRealm;
         _selectedAuctionFaction = settings.SelectedAuctionFaction;
@@ -190,6 +194,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _localDiscoveryTimer.Start();
         _accountingFileChangeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _accountingFileChangeTimer.Tick += AccountingFilesChanged;
+        _settingsApplyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(450) };
+        _settingsApplyTimer.Tick += ApplyDeferredSettings;
         if (Enum.TryParse<AuctionSortColumn>(settings.AuctionSortColumn, true, out var savedSortColumn) &&
             Enum.IsDefined(savedSortColumn))
             _auctionSortColumn = savedSortColumn;
@@ -204,7 +210,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         LoginCommand = new AsyncCommand(LoginAsync, () => !IsBusy);
         LogoutCommand = new AsyncCommand(LogoutAsync, () => !IsBusy);
         OpenSettingsCommand = new AsyncCommand(OpenSettingsAsync, () => !IsBusy);
-        CloseSettingsCommand = new DelegateCommand(SaveAndCloseSettings);
+        CloseSettingsCommand = new DelegateCommand(CloseSettings);
         RefreshCommand = new AsyncCommand(RefreshAsync, () => !IsBusy);
         FindWowCommand = new DelegateCommand(FindWowPath);
         OnboardingBackCommand = new DelegateCommand(GoBackInOnboarding);
@@ -554,6 +560,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             OnPropertyChanged(nameof(IsLoginVisible));
             OnPropertyChanged(nameof(IsShellVisible));
             OnPropertyChanged(nameof(IsContentVisible));
+            OnPropertyChanged(nameof(IsRealmDataSelected));
+            OnPropertyChanged(nameof(IsAddonVersionsSelected));
+            OnPropertyChanged(nameof(IsAccountingSelected));
+            OnPropertyChanged(nameof(IsAuctionHouseSelected));
+            OnPropertyChanged(nameof(IsLogsSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
             OnPropertyChanged(nameof(CurrentPageTitle));
         }
@@ -579,6 +590,12 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public string LoginStatus { get => _loginStatus; private set => SetProperty(ref _loginStatus, value); }
     public string HeaderText { get => _headerText; private set => SetProperty(ref _headerText, value); }
     public string StatusDetail { get => _statusDetail; private set => SetProperty(ref _statusDetail, value); }
+    public string StartupRegistrationStatus
+    {
+        get => _startupRegistrationStatus;
+        private set => SetProperty(ref _startupRegistrationStatus, value);
+    }
+    public string RenderingBackend => Program.RenderingBackend;
     public int SelectedTab
     {
         get => _selectedTab;
@@ -603,10 +620,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 RefreshLogs();
         }
     }
-    public bool IsRealmDataSelected => SelectedTab == 0;
-    public bool IsAddonVersionsSelected => SelectedTab == 1;
-    public bool IsAccountingSelected => SelectedTab == 2;
-    public bool IsAuctionHouseSelected => SelectedTab == 3;
+    public bool IsRealmDataSelected => SelectedTab == 0 && !IsSettingsOpen;
+    public bool IsAddonVersionsSelected => SelectedTab == 1 && !IsSettingsOpen;
+    public bool IsAccountingSelected => SelectedTab == 2 && !IsSettingsOpen;
+    public bool IsAuctionHouseSelected => SelectedTab == 3 && !IsSettingsOpen;
     public bool IsLogsSelected => SelectedTab == 4 && !IsSettingsOpen;
     public bool IsSettingsSelected => IsSettingsOpen;
     public string CurrentPageTitle => IsSettingsOpen ? "Settings" : SelectedTab switch
@@ -626,7 +643,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if (!SetProperty(ref _selectedAccount, value))
                 return;
             Settings.SelectedAccountingAccount = value?.DisplayName ?? string.Empty;
-            PersistSelectionSettings();
             var wasSuppressed = _suppressAccountingRefresh;
             _suppressAccountingRefresh = true;
             try
@@ -650,7 +666,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if (SetProperty(ref _selectedRealm, value))
             {
                 Settings.SelectedAccountingRealm = value ?? string.Empty;
-                PersistSelectionSettings();
                 ResetAccountingPlayerSelection();
                 InvalidateAccountingStatistics();
             }
@@ -670,7 +685,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if (SetProperty(ref _selectedAccountingPlayer, value ?? "All players"))
             {
                 Settings.SelectedAccountingPlayer = _selectedAccountingPlayer;
-                PersistSelectionSettings();
                 OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
                 InvalidateAccountingStatistics();
             }
@@ -720,7 +734,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if (SetProperty(ref _selectedAuctionRealm, value))
             {
                 Settings.SelectedAuctionRealm = value ?? "All realms";
-                PersistSelectionSettings();
                 QueueAuctionSearch();
             }
         }
@@ -733,7 +746,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if (SetProperty(ref _selectedAuctionFaction, value))
             {
                 Settings.SelectedAuctionFaction = value;
-                PersistSelectionSettings();
                 QueueAuctionSearch();
             }
         }
@@ -1017,11 +1029,19 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     public void SaveWindowPlacement(double width, double height, int? x, int? y, bool maximized)
     {
-        Settings.WindowWidth = width;
-        Settings.WindowHeight = height;
-        Settings.WindowX = x;
-        Settings.WindowY = y;
-        Settings.WindowMaximized = maximized;
+        _suppressSettingsPersistence = true;
+        try
+        {
+            Settings.WindowWidth = width;
+            Settings.WindowHeight = height;
+            Settings.WindowX = x;
+            Settings.WindowY = y;
+            Settings.WindowMaximized = maximized;
+        }
+        finally
+        {
+            _suppressSettingsPersistence = false;
+        }
         _settingsStore.Save(Settings);
     }
 
@@ -1079,7 +1099,15 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             }
 
             _apiClient.Logout();
-            Settings.ResetToDefaults();
+            _suppressSettingsPersistence = true;
+            try
+            {
+                Settings.ResetToDefaults();
+            }
+            finally
+            {
+                _suppressSettingsPersistence = false;
+            }
             _auctionFavoriteKeys.Clear();
             ManagedRealms.Clear();
             AvailableRealms.Clear();
@@ -1126,7 +1154,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
 
         Settings.HasCompletedOnboarding = true;
-        SaveSettings();
         IsOnboardingVisible = false;
     }
 
@@ -1285,8 +1312,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         if (SelectedTab is >= 0 and <= 4)
             _lastContentTab = SelectedTab;
         IsSettingsOpen = true;
-        if (_apiClient.IsAuthenticated)
-            await Task.WhenAll(LoadAvailableRealmsAsync(), RefreshBackupsAsync());
+        if (IsLoggedIn)
+        {
+            await LoadAvailableRealmsAsync();
+            await RefreshBackupsAsync();
+        }
     }
 
     private async Task RefreshBackupsAsync()
@@ -1401,20 +1431,31 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         RealmManagementStatus = "Loading available realms…";
         try
         {
+            if (!_apiClient.IsAuthenticated)
+            {
+                var restored = await RestoreSavedLoginAsync();
+                if (restored is null || !restored.Success)
+                    throw new InvalidOperationException(restored?.Message ?? "The saved login could not be restored.");
+            }
             var realms = await _apiClient.GetAvailableRealmsAsync();
+            var available = realms.Where(realm => !Settings.ManagedRealms.Any(managed =>
+                    string.Equals(managed.GameVersion, realm.GameVersion, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(managed.Id, realm.Id, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
             AvailableRealms.Clear();
-            foreach (var realm in realms.Where(realm => !Settings.ManagedRealms.Any(managed =>
-                         string.Equals(managed.GameVersion, realm.GameVersion, StringComparison.OrdinalIgnoreCase) &&
-                         string.Equals(managed.Id, realm.Id, StringComparison.OrdinalIgnoreCase))))
+            foreach (var realm in available)
                 AvailableRealms.Add(realm);
             SelectedAvailableRealm = AvailableRealms.FirstOrDefault();
+            _logService.WriteSync("info",
+                $"Realm catalog loaded: {realms.Count} returned, {available.Length} available after filtering.");
             RealmManagementStatus = AvailableRealms.Count == 0
-                ? "No additional realms are available for this account."
+                ? $"No additional realms are available ({realms.Count} returned by TSM)."
                 : $"{AvailableRealms.Count} realm(s) available.";
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             RealmManagementStatus = $"Could not load realms: {exception.Message}";
+            _logService.WriteSync("error", RealmManagementStatus);
         }
     }
 
@@ -1525,8 +1566,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     {
         if (!IsLoggedIn)
             return;
-        if (IsSettingsOpen)
-            SaveSettings();
         if (SelectedTab != index)
         {
             SelectedAuctionItem = null;
@@ -1582,32 +1621,62 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
-    private void SaveAndCloseSettings()
+    private void CloseSettings()
     {
-        SaveSettings();
         IsSettingsOpen = false;
         SelectedTab = _lastContentTab;
     }
 
-    private void SaveSettings()
+    private void SettingsChanged(object? sender, PropertyChangedEventArgs args)
     {
-        _settingsStore.Save(Settings);
-        RestartAutomaticUpdateChecks();
-        ApplyStartupRegistration();
-        RefreshLocalData();
+        if (_suppressSettingsPersistence)
+            return;
+        try
+        {
+            _settingsStore.Save(Settings);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            StatusDetail = $"Could not save settings: {exception.Message}";
+            return;
+        }
+
+        switch (args.PropertyName)
+        {
+            case nameof(Settings.RunAtStartup):
+                ApplyStartupRegistration();
+                break;
+            case nameof(Settings.AutomaticUpdateChecks):
+            case nameof(Settings.UpdateCheckIntervalHours):
+            case nameof(Settings.ReleaseChannel):
+                RestartAutomaticUpdateChecks();
+                break;
+            case nameof(Settings.WowPath):
+                _settingsApplyTimer.Stop();
+                _settingsApplyTimer.Start();
+                break;
+        }
     }
 
-    private void PersistSelectionSettings() => _settingsStore.Save(Settings);
+    private void ApplyDeferredSettings(object? sender, EventArgs args)
+    {
+        _settingsApplyTimer.Stop();
+        RefreshLocalData();
+    }
 
     private void ApplyStartupRegistration()
     {
         try
         {
-            _startupRegistration.Apply(Settings.RunAtStartup);
+            var location = _startupRegistration.Apply(Settings.RunAtStartup);
+            StartupRegistrationStatus = Settings.RunAtStartup
+                ? $"Registered in {location}."
+                : "Startup launch is disabled.";
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            StatusDetail = $"Could not apply startup settings: {exception.Message}";
+            StartupRegistrationStatus = $"Could not update startup registration: {exception.Message}";
+            StatusDetail = StartupRegistrationStatus;
         }
     }
 
@@ -1728,6 +1797,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _localDiscoveryTimer.Tick -= DetectLocalChanges;
         _accountingFileChangeTimer.Stop();
         _accountingFileChangeTimer.Tick -= AccountingFilesChanged;
+        _settingsApplyTimer.Stop();
+        _settingsApplyTimer.Tick -= ApplyDeferredSettings;
+        Settings.PropertyChanged -= SettingsChanged;
         DisposeAccountingFileWatchers();
         if (_auctionSearchCancellation is not null)
             await _auctionSearchCancellation.CancelAsync();
@@ -2101,7 +2173,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
         _selectedAccountingPlayer = "All players";
         Settings.SelectedAccountingPlayer = _selectedAccountingPlayer;
-        PersistSelectionSettings();
         OnPropertyChanged(nameof(SelectedAccountingPlayer));
         OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
     }
@@ -2376,7 +2447,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 ? "All players"
                 : previousPlayer;
             Settings.SelectedAccountingPlayer = _selectedAccountingPlayer;
-            PersistSelectionSettings();
             OnPropertyChanged(nameof(SelectedAccountingPlayer));
             OnPropertyChanged(nameof(SelectedAccountingPlayerIndex));
         }

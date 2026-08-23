@@ -22,16 +22,21 @@ public sealed partial class MainWindow : Window
     private bool _wasMaximized;
     private bool _restoringWindowPlacement;
     private bool _restoreMaximizedAfterOpen;
+    private bool _startupHandled;
+    private bool _startupHidePending;
     private PixelPoint? _restorePositionAfterOpen;
+    private DateTimeOffset _lastPlacementChangeUtc;
     private readonly DispatcherTimer _placementSaveTimer;
 
     public MainWindow()
     {
         InitializeComponent();
-        _placementSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        _placementSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
         _placementSaveTimer.Tick += SavePlacementTimerTick;
         AddHandler(KeyDownEvent, CloseItemDrawerOnEscape, RoutingStrategies.Tunnel);
         AuctionList.AddHandler(ScrollViewer.ScrollChangedEvent, AuctionListScrolled, RoutingStrategies.Bubble);
+        AuctionItemDrawer.PropertyChanged += DrawerVisibilityChanged;
+        AccountingItemDrawer.PropertyChanged += DrawerVisibilityChanged;
         Opened += ApplyDeferredWindowPlacement;
         Opened += InitializeViewModel;
         Closed += DisposeViewModel;
@@ -170,12 +175,15 @@ public sealed partial class MainWindow : Window
     {
         if (_restoringWindowPlacement || DataContext is not MainWindowViewModel)
             return;
-        _placementSaveTimer.Stop();
-        _placementSaveTimer.Start();
+        _lastPlacementChangeUtc = DateTimeOffset.UtcNow;
+        if (!_placementSaveTimer.IsEnabled)
+            _placementSaveTimer.Start();
     }
 
     private void SavePlacementTimerTick(object? sender, EventArgs e)
     {
+        if (DateTimeOffset.UtcNow - _lastPlacementChangeUtc < TimeSpan.FromMilliseconds(350))
+            return;
         _placementSaveTimer.Stop();
         PersistWindowPlacement();
     }
@@ -191,6 +199,8 @@ public sealed partial class MainWindow : Window
 
     private void AuctionWorkspaceSizeChanged(object? sender, SizeChangedEventArgs e)
     {
+        if (!AuctionItemDrawer.IsVisible)
+            return;
         UpdateAuctionDrawerMaximumHeight(e.NewSize.Height);
     }
 
@@ -203,8 +213,20 @@ public sealed partial class MainWindow : Window
 
     private void AccountingWorkspaceSizeChanged(object? sender, SizeChangedEventArgs e)
     {
+        if (!AccountingItemDrawer.IsVisible)
+            return;
         if (e.NewSize.Height > 0)
             AccountingItemDrawer.MaxHeight = Math.Max(1, e.NewSize.Height - 24);
+    }
+
+    private void DrawerVisibilityChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != Visual.IsVisibleProperty || sender is not Border { IsVisible: true } drawer)
+            return;
+        if (ReferenceEquals(drawer, AuctionItemDrawer))
+            UpdateAuctionDrawerMaximumHeight(AuctionWorkspace.Bounds.Height);
+        else if (ReferenceEquals(drawer, AccountingItemDrawer) && AccountingItemDrawer.Parent is Grid workspace)
+            AccountingItemDrawer.MaxHeight = Math.Max(1, workspace.Bounds.Height - 24);
     }
 
     private async void DisposeViewModel(object? sender, EventArgs e)
@@ -216,12 +238,18 @@ public sealed partial class MainWindow : Window
 
     private async void InitializeViewModel(object? sender, EventArgs e)
     {
+        if (_startupHandled)
+            return;
+        _startupHandled = true;
         if (DataContext is MainWindowViewModel viewModel)
         {
             if (viewModel.Settings.HasCompletedOnboarding && viewModel.Settings.StartMinimized)
             {
                 if (viewModel.Settings.MinimizeToTray)
-                    HideToTray();
+                {
+                    _startupHidePending = true;
+                    Dispatcher.UIThread.Post(HideAfterStartup, DispatcherPriority.Loaded);
+                }
                 else
                     WindowState = WindowState.Minimized;
             }
@@ -231,11 +259,20 @@ public sealed partial class MainWindow : Window
 
     public void RestoreFromTray()
     {
+        _startupHidePending = false;
         ShowInTaskbar = true;
         if (!IsVisible)
             Show();
         WindowState = _wasMaximized ? WindowState.Maximized : WindowState.Normal;
         Activate();
+    }
+
+    private void HideAfterStartup()
+    {
+        if (!_startupHidePending)
+            return;
+        _startupHidePending = false;
+        HideToTray();
     }
 
     public async Task<bool> ConfirmExitAsync()

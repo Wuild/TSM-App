@@ -32,15 +32,17 @@
       <Setter Property="Height" Value="46" />
       <Setter Property="MinHeight" Value="46" />
       <Setter Property="HorizontalAlignment" Value="Stretch" />
-      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
-      <Setter Property="Padding" Value="14,0" />
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Padding" Value="0" />
       <Setter Property="CornerRadius" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="3,0,0,0" />
       <Setter Property="Foreground" Value="#AAAAAA" />
+      <Setter Property="ToolTip.Placement" Value="Right" />
+      <Setter Property="ToolTip.ShowDelay" Value="250" />
+      <Setter Property="ToolTip.BetweenShowDelay" Value="100" />
     </Style>
     <Style Selector="ToggleButton.nav:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="#202020" />
@@ -52,7 +54,6 @@
     </Style>
     <Style Selector="ToggleButton.nav:checked">
       <Setter Property="BorderBrush" Value="#F5A623" />
-      <Setter Property="Padding" Value="11,0,14,0" />
     </Style>
     <Style Selector="Button.icon">
       <Setter Property="Width" Value="36" />
@@ -172,70 +173,49 @@
     </Style>
   </Window.Styles>
 
-  <Grid>
-    <Grid IsVisible="{Binding IsShellVisible}" ColumnDefinitions="224,*">
+  <Grid Background="{StaticResource AppBackgroundBrush}">
+    <Grid IsVisible="{Binding IsShellVisible}" ColumnDefinitions="60,*">
       <Border Background="#181818" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
-        <Grid RowDefinitions="Auto,*,Auto" Margin="10">
-          <StackPanel Spacing="10" Margin="6,10,6,22">
-            <StackPanel Orientation="Horizontal" Spacing="11">
-              <Image Width="36" Height="36" Source="/Assets/tsm-app.png" />
-              <StackPanel VerticalAlignment="Center" Spacing="0">
-                <TextBlock Text="TSM Desktop" FontSize="15" FontWeight="SemiBold" Foreground="#EEEEEE" />
-              </StackPanel>
-            </StackPanel>
-          </StackPanel>
-
-          <StackPanel Grid.Row="1" Spacing="4">
+        <Grid RowDefinitions="*,Auto" Margin="7">
+          <StackPanel Spacing="4">
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsAccountingSelected, Mode=OneWay}"
-                          Command="{Binding ShowAccountingCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="FileSpreadsheet" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Accounting" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
+                          Command="{Binding ShowAccountingCommand}"
+                          ToolTip.Tip="Accounting" AutomationProperties.Name="Accounting">
+              <lucide:LucideIcon Kind="FileSpreadsheet" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsAuctionHouseSelected, Mode=OneWay}"
-                          Command="{Binding ShowAuctionHouseCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="Search" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Auction House" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
+                          Command="{Binding ShowAuctionHouseCommand}"
+                          ToolTip.Tip="Auction House" AutomationProperties.Name="Auction House">
+              <lucide:LucideIcon Kind="Search" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsRealmDataSelected, Mode=OneWay}"
-                          Command="{Binding ShowRealmDataCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="Database" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Realm data" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
+                          Command="{Binding ShowRealmDataCommand}"
+                          ToolTip.Tip="Realm data" AutomationProperties.Name="Realm data">
+              <lucide:LucideIcon Kind="Database" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsAddonVersionsSelected, Mode=OneWay}"
-                          Command="{Binding ShowAddonVersionsCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="Package" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Addons" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
+                          Command="{Binding ShowAddonVersionsCommand}"
+                          ToolTip.Tip="Addons" AutomationProperties.Name="Addons">
+              <lucide:LucideIcon Kind="Package" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsLogsSelected, Mode=OneWay}"
-                          Command="{Binding ShowLogsCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="FileText" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Logs" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
+                          Command="{Binding ShowLogsCommand}"
+                          ToolTip.Tip="Logs" AutomationProperties.Name="Logs">
+              <lucide:LucideIcon Kind="FileText" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
           </StackPanel>
 
-          <StackPanel Grid.Row="2" Spacing="8">
+          <StackPanel Grid.Row="1" Spacing="8">
             <Border Height="1" Background="{StaticResource BorderBrush}" Margin="4,0" />
             <ToggleButton Classes="nav" IsChecked="{Binding IsSettingsSelected, Mode=OneWay}"
-                          Command="{Binding OpenSettingsCommand}">
-              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
-                <lucide:LucideIcon Kind="Settings" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="Settings" VerticalAlignment="Center" FontWeight="Medium" />
-              </Grid>
+                          Command="{Binding OpenSettingsCommand}"
+                          ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
+              <lucide:LucideIcon Kind="Settings" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
           </StackPanel>
         </Grid>
@@ -257,7 +237,7 @@
             </Border>
             <Button Grid.Column="3" Content="Add realm" Command="{Binding OpenSettingsCommand}"
                     IsVisible="{Binding IsRealmDataSelected}" />
-            <Button Grid.Column="4" Content="Done" Command="{Binding CloseSettingsCommand}"
+            <Button Grid.Column="4" Content="Close" Command="{Binding CloseSettingsCommand}"
                     IsVisible="{Binding IsSettingsOpen}" />
             <Button Grid.Column="5" Classes="icon" Command="{Binding RefreshCommand}"
                     IsEnabled="{Binding IsLoggedIn}" ToolTip.Tip="Refresh data">
@@ -1221,10 +1201,11 @@
 
         <Grid Grid.Row="1" IsVisible="{Binding IsSettingsOpen}">
           <Border Classes="card workspace" ClipToBounds="True">
-            <TabControl Background="Transparent" Padding="0">
+            <TabControl Background="Transparent" Padding="0"
+                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
               <TabItem Header="General" Classes="settings-tab">
-                <ScrollViewer Padding="20">
-                  <StackPanel Spacing="18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="18" Margin="20,20,20,32">
                     <StackPanel Spacing="4">
                       <TextBlock Text="World of Warcraft" Classes="section-title" />
                       <TextBlock Text="Choose the base folder containing your WoW clients." Classes="muted" FontSize="10" />
@@ -1269,9 +1250,31 @@
                       <TextBlock Text="Window options" FontWeight="SemiBold" FontSize="11" />
                       <StackPanel Grid.Column="1" Spacing="11">
                         <CheckBox Content="Run at startup" IsChecked="{Binding Settings.RunAtStartup}" />
+                        <TextBlock Text="{Binding StartupRegistrationStatus}" Classes="muted" FontSize="10"
+                                   Margin="24,-5,0,2" TextWrapping="Wrap" />
                         <CheckBox Content="Start minimized" IsChecked="{Binding Settings.StartMinimized}" />
                         <CheckBox Content="Minimize to system tray" IsChecked="{Binding Settings.MinimizeToTray}" />
                         <CheckBox Content="Confirm before exiting" IsChecked="{Binding Settings.ConfirmExit}" />
+                      </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="{StaticResource BorderBrush}" />
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Performance" Classes="section-title" />
+                      <TextBlock Text="Choose how the interface is rendered." Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+                      <TextBlock Text="Rendering" FontWeight="SemiBold" FontSize="11" />
+                      <StackPanel Grid.Column="1" Spacing="6">
+                        <CheckBox Content="Use hardware acceleration"
+                                  IsChecked="{Binding Settings.HardwareAcceleration}" />
+                        <TextBlock Classes="muted" FontSize="10" Margin="24,0,0,0" TextWrapping="Wrap"
+                                   Text="Uses the GPU for smoother scrolling and charts. Turn this off to troubleshoot graphics issues or reduce GPU memory. Restart required." />
+                        <CheckBox Content="Prefer native Wayland when available"
+                                  IsChecked="{Binding Settings.PreferNativeWayland}" />
+                        <TextBlock Classes="muted" FontSize="10" Margin="24,0,0,0" TextWrapping="Wrap"
+                                   Text="Linux only. Uses native Wayland when available, with an app-integrated title bar when the compositor does not provide one. Restart required." />
+                        <TextBlock Classes="muted" FontSize="10" Margin="24,2,0,0"
+                                   Text="{Binding RenderingBackend, StringFormat='Current renderer: {0}'}" />
                       </StackPanel>
                     </Grid>
                   </StackPanel>
@@ -1279,8 +1282,8 @@
               </TabItem>
 
               <TabItem Header="Notifications" Classes="settings-tab">
-                <ScrollViewer Padding="20">
-                  <StackPanel Spacing="18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="18" Margin="20,20,20,32">
                     <StackPanel Spacing="4">
                       <TextBlock Text="Desktop notifications" Classes="section-title" />
                       <TextBlock Text="Choose which events are allowed to notify you." Classes="muted" FontSize="10" />
@@ -1298,8 +1301,8 @@
               </TabItem>
 
               <TabItem Header="Updates" Classes="settings-tab">
-                <ScrollViewer Padding="20">
-                  <StackPanel Spacing="18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="18" Margin="20,20,20,32">
                     <StackPanel Spacing="4">
                       <TextBlock Text="Application updates" Classes="section-title" />
                       <TextBlock Text="Updates come directly from Wuild/TSM-App releases on GitHub." Classes="muted" FontSize="10" />
@@ -1390,8 +1393,8 @@
               </TabItem>
 
               <TabItem Header="Advanced" Classes="settings-tab">
-                <ScrollViewer Padding="20">
-                  <StackPanel Spacing="18">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="18" Margin="20,20,20,32">
                     <StackPanel Spacing="4">
                       <TextBlock Text="Account sync" Classes="section-title" />
                       <TextBlock Text="Compatibility and account security options." Classes="muted" FontSize="10" />
@@ -1422,8 +1425,8 @@
               </TabItem>
 
               <TabItem Header="Help" Classes="settings-tab">
-                <ScrollViewer Padding="20">
-                  <StackPanel Spacing="20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="20" Margin="20,20,20,32">
                     <StackPanel Spacing="4">
                       <TextBlock Text="Help and troubleshooting" Classes="section-title" />
                       <TextBlock Text="Quick guidance for the most common setup and data problems."
@@ -1470,8 +1473,8 @@
               </TabItem>
 
               <TabItem Header="Licenses" Classes="settings-tab">
-                <ScrollViewer Padding="20">
-                  <StackPanel Spacing="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="16" Margin="20,20,20,32">
                     <StackPanel Spacing="4">
                       <TextBlock Text="Open-source licenses" Classes="section-title" />
                       <TextBlock Text="Direct and transitive packages are grouped by their upstream project. Platform-specific native asset packages use the same upstream license."

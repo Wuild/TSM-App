@@ -7,39 +7,42 @@ namespace TSM.Services;
 public sealed class StartupRegistrationService
 {
     private const string ApplicationId = "TradeSkillMaster-CrossPlatform";
+    private const string LinuxDesktopId = "com.wuild.TSMDesktop.desktop";
+    private const string LegacyLinuxDesktopId = "tradeskillmaster-crossplatform.desktop";
 
-    public void Apply(bool enabled)
+    public string Apply(bool enabled)
     {
         if (OperatingSystem.IsWindows())
-            ApplyWindows(enabled);
-        else if (OperatingSystem.IsMacOS())
-            ApplyMacOs(enabled);
-        else
-            ApplyLinux(enabled);
+            return ApplyWindows(enabled);
+        return OperatingSystem.IsMacOS() ? ApplyMacOs(enabled) : ApplyLinux(enabled);
     }
 
     [SupportedOSPlatform("windows")]
-    private static void ApplyWindows(bool enabled)
+    private static string ApplyWindows(bool enabled)
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
         if (enabled)
             key.SetValue(ApplicationId, BuildQuotedCommand(), RegistryValueKind.String);
         else
             key.DeleteValue(ApplicationId, false);
+        return @"Current user startup applications";
     }
 
-    private static void ApplyLinux(bool enabled)
+    private static string ApplyLinux(bool enabled)
     {
         var configHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         if (string.IsNullOrWhiteSpace(configHome))
             configHome = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
         var directory = Path.Combine(configHome, "autostart");
-        var path = Path.Combine(directory, "tradeskillmaster-crossplatform.desktop");
+        var path = Path.Combine(directory, LinuxDesktopId);
+        var legacyPath = Path.Combine(directory, LegacyLinuxDesktopId);
         if (!enabled)
         {
             if (File.Exists(path))
                 File.Delete(path);
-            return;
+            if (File.Exists(legacyPath))
+                File.Delete(legacyPath);
+            return path;
         }
 
         Directory.CreateDirectory(directory);
@@ -50,12 +53,16 @@ public sealed class StartupRegistrationService
             "Name=TSM Desktop\n" +
             $"Exec={string.Join(' ', command)}\n" +
             "Terminal=false\n" +
-            "NoDisplay=true\n" +
+            "Hidden=false\n" +
             "StartupWMClass=TSM\n" +
-            "X-GNOME-Autostart-enabled=true\n");
+            "X-GNOME-Autostart-enabled=true\n" +
+            "X-GNOME-Autostart-Delay=3\n");
+        if (File.Exists(legacyPath))
+            File.Delete(legacyPath);
+        return path;
     }
 
-    private static void ApplyMacOs(bool enabled)
+    private static string ApplyMacOs(bool enabled)
     {
         var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Library", "LaunchAgents");
@@ -64,7 +71,7 @@ public sealed class StartupRegistrationService
         {
             if (File.Exists(path))
                 File.Delete(path);
-            return;
+            return path;
         }
 
         Directory.CreateDirectory(directory);
@@ -78,6 +85,7 @@ public sealed class StartupRegistrationService
             "  <key>ProgramArguments</key>\n  <array>\n" + arguments + "  </array>\n" +
             "  <key>RunAtLoad</key><true/>\n" +
             "</dict>\n</plist>\n");
+        return path;
     }
 
     private static IReadOnlyList<string> BuildCommandParts()

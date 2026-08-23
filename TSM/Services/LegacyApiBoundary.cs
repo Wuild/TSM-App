@@ -236,7 +236,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var result = new List<TsmRealmChoice>();
-        if (!CollectRealmChoices(document.RootElement, result))
+        if (!CollectRealmChoices(document.RootElement, result, string.Empty, string.Empty, true))
             throw new InvalidDataException("The realm service returned no realm lists.");
         return result.DistinctBy(value => (value.GameVersion.ToUpperInvariant(), value.Id))
             .OrderBy(value => value.GameLabel, StringComparer.OrdinalIgnoreCase)
@@ -245,51 +245,125 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
             .ToArray();
     }
 
-    private static bool CollectRealmChoices(JsonElement element, ICollection<TsmRealmChoice> result)
+    private static bool CollectRealmChoices(
+        JsonElement element,
+        ICollection<TsmRealmChoice> result,
+        string inheritedGameVersion,
+        string inheritedRegion,
+        bool listContext)
     {
+        var foundRealmList = false;
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foundRealmList = listContext || inheritedGameVersion.Length > 0;
+            foreach (var entry in element.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object)
+                    continue;
+                var gameVersion = inheritedGameVersion;
+                if (gameVersion.Length == 0 && TryReadString(entry, out var entryVersion,
+                        "gameVersion", "game_version", "game", "version", "flavor"))
+                    gameVersion = NormalizeGameVersion(entryVersion);
+                var label = GameVersionLabel(gameVersion);
+                if (label.Length > 0 && TryReadStringOrNumber(entry, out var id,
+                        "id", "realmId", "realm_id", "serverId", "server_id") &&
+                    TryReadString(entry, out var name, "name", "realmName", "realm_name"))
+                {
+                    var region = TryReadString(entry, out var entryRegion, "region")
+                        ? entryRegion
+                        : inheritedRegion;
+                    result.Add(new TsmRealmChoice(gameVersion, label, region, name, id));
+                }
+                else
+                {
+                    foundRealmList |= CollectRealmChoices(entry, result, gameVersion, inheritedRegion, listContext);
+                }
+            }
+            return foundRealmList;
+        }
+
         if (element.ValueKind != JsonValueKind.Object)
             return false;
-        var foundRealmList = false;
         foreach (var property in element.EnumerateObject())
         {
-            var gameVersion = property.Name.ToLowerInvariant();
-            var label = gameVersion switch
+            var propertyGameVersion = NormalizeGameVersion(property.Name);
+            var gameVersion = propertyGameVersion.Length > 0 ? propertyGameVersion : inheritedGameVersion;
+            var region = IsRegion(property.Name) ? property.Name.ToUpperInvariant() : inheritedRegion;
+            var childListContext = listContext || propertyGameVersion.Length > 0 ||
+                                   property.Name.Equals("data", StringComparison.OrdinalIgnoreCase) ||
+                                   property.Name.Equals("realms", StringComparison.OrdinalIgnoreCase) ||
+                                   property.Name.Equals("available", StringComparison.OrdinalIgnoreCase) ||
+                                   property.Name.Equals("realmLists", StringComparison.OrdinalIgnoreCase);
+            if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
             {
-                "retail" => "Retail",
-                "bcc" => "Progression",
-                "classic" => "Classic Era",
-                "anniversary" => "Anniversary",
-                _ => string.Empty
-            };
-            if (label.Length == 0 || property.Value.ValueKind != JsonValueKind.Array)
-            {
-                if (property.Value.ValueKind == JsonValueKind.Object)
-                    foundRealmList |= CollectRealmChoices(property.Value, result);
-                continue;
-            }
-            foundRealmList = true;
-            foreach (var entry in property.Value.EnumerateArray())
-            {
-                if (entry.ValueKind != JsonValueKind.Object ||
-                    !entry.TryGetProperty("id", out var idElement) ||
-                    !entry.TryGetProperty("name", out var nameElement))
-                    continue;
-                var id = idElement.ValueKind switch
-                {
-                    JsonValueKind.String => idElement.GetString() ?? string.Empty,
-                    JsonValueKind.Number => idElement.GetRawText(),
-                    _ => string.Empty
-                };
-                var name = nameElement.ValueKind == JsonValueKind.String ? nameElement.GetString() ?? string.Empty : string.Empty;
-                var region = entry.TryGetProperty("region", out var regionElement) &&
-                             regionElement.ValueKind == JsonValueKind.String
-                    ? regionElement.GetString() ?? string.Empty
-                    : string.Empty;
-                if (id.Length > 0 && name.Length > 0)
-                    result.Add(new TsmRealmChoice(gameVersion, label, region, name, id));
+                foundRealmList |= CollectRealmChoices(property.Value, result, gameVersion, region, childListContext);
             }
         }
         return foundRealmList;
+    }
+
+    private static string NormalizeGameVersion(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "retail" => "retail",
+        "bcc" => "bcc",
+        "tbc" => "tbc",
+        "progression" => "progression",
+        "classic" => "classic",
+        "vanilla" => "vanilla",
+        "classic_era" => "classic_era",
+        "anniversary" => "anniversary",
+        "mop" => "mop",
+        "mists" => "mists",
+        "classic_mop" => "classic_mop",
+        _ => string.Empty
+    };
+
+    private static string GameVersionLabel(string gameVersion) => gameVersion switch
+    {
+        "retail" => "Retail",
+        "bcc" or "tbc" or "progression" => "Progression",
+        "classic" or "vanilla" or "classic_era" => "Classic Era",
+        "anniversary" => "Anniversary",
+        "mop" or "mists" or "classic_mop" => "Mists of Pandaria Classic",
+        _ => string.Empty
+    };
+
+    private static bool IsRegion(string value) => value.Equals("US", StringComparison.OrdinalIgnoreCase) ||
+                                                   value.Equals("EU", StringComparison.OrdinalIgnoreCase) ||
+                                                   value.Equals("KR", StringComparison.OrdinalIgnoreCase) ||
+                                                   value.Equals("TW", StringComparison.OrdinalIgnoreCase) ||
+                                                   value.Equals("CN", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryReadString(JsonElement element, out string value, params string[] names)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Contains(property.Name, StringComparer.OrdinalIgnoreCase) ||
+                property.Value.ValueKind != JsonValueKind.String)
+                continue;
+            value = property.Value.GetString() ?? string.Empty;
+            return value.Length > 0;
+        }
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool TryReadStringOrNumber(JsonElement element, out string value, params string[] names)
+    {
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
+                continue;
+            value = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+                JsonValueKind.Number => property.Value.GetRawText(),
+                _ => string.Empty
+            };
+            return value.Length > 0;
+        }
+        value = string.Empty;
+        return false;
     }
 
     public async Task AddRealmAsync(
@@ -574,7 +648,9 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
         string.Equals(channel, "Beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "release";
 
     private static IReadOnlySet<string> AllowedGameVersions { get; } =
-        new HashSet<string>(["retail", "bcc", "classic", "anniversary"], StringComparer.OrdinalIgnoreCase);
+        new HashSet<string>(
+            ["retail", "bcc", "tbc", "progression", "classic", "vanilla", "classic_era", "anniversary", "mop", "mists", "classic_mop"],
+            StringComparer.OrdinalIgnoreCase);
 
     private static IReadOnlySet<string> UploadEndpoints { get; } =
         new HashSet<string>(["auctiondb_scan", "black_market", "sales", "groups", "analytics", "error_report", "sv"],
