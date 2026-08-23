@@ -17,7 +17,8 @@ if (args.Contains("--import-jsonl", StringComparer.OrdinalIgnoreCase))
                        throw new ArgumentException("--database is required with --import-jsonl.");
         var result = await ItemDatabaseSqliteBuilder.BuildAsync(inputs, database, CancellationToken.None);
         Console.WriteLine($"Wrote SQLite database: {database}");
-        Console.WriteLine($"Imported: {result.Found:N0} available, {result.Unavailable:N0} unavailable.");
+        Console.WriteLine($"Imported: {result.Found:N0} available, {result.Unavailable:N0} unavailable, " +
+                          $"{result.Skipped:N0} non-auction items filtered.");
         return 0;
     }
     catch (Exception exception)
@@ -36,11 +37,15 @@ try
         throw new InvalidOperationException(
             "Set BLIZZARD_CLIENT_ID and BLIZZARD_CLIENT_SECRET before running the builder.");
 
-    var completed = options.Refresh ? [] : ReadCompletedKeys(options.OutputPath);
+    var excludedPath = options.OutputPath + ".excluded-ids";
+    var completed = options.Refresh ? [] : ReadCompletedKeys(options.OutputPath, excludedPath);
     var outputDirectory = Path.GetDirectoryName(Path.GetFullPath(options.OutputPath))!;
     Directory.CreateDirectory(outputDirectory);
     await using var output = new FileStream(options.OutputPath, FileMode.Append, FileAccess.Write, FileShare.Read);
     await using var writer = new StreamWriter(output);
+    await using var excluded = options.AuctionItemsOnly
+        ? new StreamWriter(new FileStream(excludedPath, FileMode.Append, FileAccess.Write, FileShare.Read))
+        : null;
     using var writeLock = new SemaphoreSlim(1, 1);
     using var api = new BlizzardApiClient(clientId, clientSecret, options.Region, options.Locale,
         options.RequestsPerSecond, options.MaximumAttempts);
@@ -55,7 +60,8 @@ try
     if (options.DiscoverIds)
     {
         foreach (var catalog in options.Catalogs)
-            idsByCatalog[catalog] = await api.DiscoverItemIdsAsync(catalog.Namespace, cancellation.Token);
+            idsByCatalog[catalog] = await api.DiscoverItemIdsAsync(catalog.Namespace, options.AuctionItemsOnly,
+                cancellation.Token);
         if (!string.IsNullOrWhiteSpace(options.DiscoveredIdsPath))
         {
             var discoveredPath = Path.GetFullPath(options.DiscoveredIdsPath);
@@ -81,6 +87,7 @@ try
     var processed = resumed;
     var written = 0;
     var missing = 0;
+    var filtered = 0;
     var consoleLock = new object();
     await Parallel.ForEachAsync(work, new ParallelOptions
     {
@@ -99,6 +106,22 @@ try
         }
         else
         {
+            if (options.AuctionItemsOnly && !AuctionItemFilter.IsAuctionRelevant(item.RootElement))
+            {
+                await writeLock.WaitAsync(itemCancellationToken);
+                try
+                {
+                    await excluded!.WriteLineAsync($"{catalog.Flavor}:{itemId}");
+                    await excluded.FlushAsync(itemCancellationToken);
+                }
+                finally
+                {
+                    writeLock.Release();
+                }
+                Interlocked.Increment(ref filtered);
+                ReportProgress();
+                return;
+            }
             using var media = await api.GetItemMediaAsync(itemId, catalog.Namespace, itemCancellationToken);
             using var emptyMedia = JsonDocument.Parse("{}");
             record = ItemDatabaseRecord.Create(catalog, options.Region, options.Locale, itemId,
@@ -115,18 +138,24 @@ try
         {
             writeLock.Release();
         }
-        var current = Interlocked.Increment(ref processed);
-        if (current == total || current % 100 == 0)
+        ReportProgress();
+
+        void ReportProgress()
         {
-            lock (consoleLock)
-                Console.WriteLine($"[{DateTimeOffset.Now:HH:mm:ss}] [{current:N0}/{total:N0}] " +
-                                  $"{catalog.Flavor} item {itemId}");
+            var current = Interlocked.Increment(ref processed);
+            if (current == total || current % 100 == 0)
+            {
+                lock (consoleLock)
+                    Console.WriteLine($"[{DateTimeOffset.Now:HH:mm:ss}] [{current:N0}/{total:N0}] " +
+                                      $"{catalog.Flavor} item {itemId} · {filtered:N0} filtered");
+            }
         }
     });
 
     if (options.ManifestPath is not null)
         await WriteManifestAsync(options.OutputPath, options.ManifestPath, cancellation.Token);
-    Console.WriteLine($"Finished: {written:N0} written, {missing:N0} unavailable, {resumed:N0} resumed.");
+    Console.WriteLine($"Finished: {written:N0} written, {missing:N0} unavailable, {filtered:N0} filtered, " +
+                      $"{resumed:N0} resumed.");
     return 0;
 }
 catch (OperationCanceledException)
@@ -140,11 +169,10 @@ catch (Exception exception)
     return 1;
 }
 
-static HashSet<string> ReadCompletedKeys(string path)
+static HashSet<string> ReadCompletedKeys(string path, string excludedPath)
 {
     var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    if (!File.Exists(path))
-        return keys;
+    if (File.Exists(path))
     foreach (var line in File.ReadLines(path))
     {
         try
@@ -159,6 +187,13 @@ static HashSet<string> ReadCompletedKeys(string path)
         catch (JsonException)
         {
         }
+    }
+    if (File.Exists(excludedPath))
+    foreach (var line in File.ReadLines(excludedPath))
+    {
+        var key = line.Trim();
+        if (key.Length > 0)
+            keys.Add(key);
     }
     return keys;
 }
@@ -235,6 +270,7 @@ static void PrintHelp()
           --import-jsonl FILE          Build SQLite from JSONL; repeat for each flavor
           --database FILE              SQLite output used with --import-jsonl
           --refresh                    Fetch records even when already present
+          --auction-items-only         Filter junk/non-tradeable items before media download
           --help                       Show this help
 
         Example:

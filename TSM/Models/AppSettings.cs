@@ -25,6 +25,8 @@ public sealed class AppSettings : ObservableObject
     private string _lastNotifiedGitHubVersion = string.Empty;
     private DateTimeOffset? _lastSuccessfulSyncUtc;
     private bool _loadOnlineItemIcons = true;
+    private bool _uploadAddonData = true;
+    private string _uploadSystemId = Guid.NewGuid().ToString("N");
     private bool _hasCompletedOnboarding;
     private string _auctionSortColumn = "Item";
     private bool _auctionSortDescending;
@@ -67,6 +69,13 @@ public sealed class AppSettings : ObservableObject
     public string LastNotifiedGitHubVersion { get => _lastNotifiedGitHubVersion; set => SetProperty(ref _lastNotifiedGitHubVersion, value ?? string.Empty); }
     public DateTimeOffset? LastSuccessfulSyncUtc { get => _lastSuccessfulSyncUtc; set => SetProperty(ref _lastSuccessfulSyncUtc, value); }
     public bool LoadOnlineItemIcons { get => _loadOnlineItemIcons; set => SetProperty(ref _loadOnlineItemIcons, value); }
+    public bool UploadAddonData { get => _uploadAddonData; set => SetProperty(ref _uploadAddonData, value); }
+    public string UploadSystemId
+    {
+        get => _uploadSystemId;
+        set => SetProperty(ref _uploadSystemId,
+            string.IsNullOrWhiteSpace(value) ? Guid.NewGuid().ToString("N") : value);
+    }
     public bool HasCompletedOnboarding { get => _hasCompletedOnboarding; set => SetProperty(ref _hasCompletedOnboarding, value); }
     public string AuctionSortColumn
     {
@@ -147,6 +156,8 @@ public sealed class AppSettings : ObservableObject
         LastNotifiedGitHubVersion = defaults.LastNotifiedGitHubVersion;
         LastSuccessfulSyncUtc = defaults.LastSuccessfulSyncUtc;
         LoadOnlineItemIcons = defaults.LoadOnlineItemIcons;
+        UploadAddonData = defaults.UploadAddonData;
+        UploadSystemId = defaults.UploadSystemId;
         HasCompletedOnboarding = defaults.HasCompletedOnboarding;
         AuctionSortColumn = defaults.AuctionSortColumn;
         AuctionSortDescending = defaults.AuctionSortDescending;

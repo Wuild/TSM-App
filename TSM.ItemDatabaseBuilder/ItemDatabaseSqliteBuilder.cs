@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 
 namespace TSM.ItemDatabaseBuilder;
 
-internal sealed record ItemDatabaseImportResult(int Found, int Unavailable);
+internal sealed record ItemDatabaseImportResult(int Found, int Unavailable, int Skipped);
 
 internal static class ItemDatabaseSqliteBuilder
 {
@@ -23,6 +23,7 @@ internal static class ItemDatabaseSqliteBuilder
         var temporaryPath = fullOutputPath + $".{Guid.NewGuid():N}.tmp";
         var found = 0;
         var unavailable = 0;
+        var skipped = 0;
         try
         {
             await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -47,6 +48,11 @@ internal static class ItemDatabaseSqliteBuilder
                     using var document = JsonDocument.Parse(line);
                     var root = document.RootElement;
                     var isFound = Boolean(root, "Found");
+                    if (isFound && !AuctionItemFilter.IsAuctionRelevant(root.GetProperty("item")))
+                    {
+                        skipped++;
+                        continue;
+                    }
                     Bind(insert, root, isFound);
                     await insert.ExecuteNonQueryAsync(cancellationToken);
                 }
@@ -58,11 +64,12 @@ internal static class ItemDatabaseSqliteBuilder
                 metadata.Transaction = (SqliteTransaction)transaction;
                 metadata.CommandText = "INSERT INTO metadata(key,value) VALUES('schema_version','1')," +
                                        "('generated_at',$generated),('available_items',$found)," +
-                                       "('unavailable_items',$unavailable);";
+                                       "('unavailable_items',$unavailable),('filtered_items',$skipped);";
                 metadata.Parameters.AddWithValue("$generated", DateTimeOffset.UtcNow.ToString("O",
                     CultureInfo.InvariantCulture));
                 metadata.Parameters.AddWithValue("$found", found.ToString(CultureInfo.InvariantCulture));
                 metadata.Parameters.AddWithValue("$unavailable", unavailable.ToString(CultureInfo.InvariantCulture));
+                metadata.Parameters.AddWithValue("$skipped", skipped.ToString(CultureInfo.InvariantCulture));
                 await metadata.ExecuteNonQueryAsync(cancellationToken);
             }
             await transaction.CommitAsync(cancellationToken);
@@ -76,7 +83,7 @@ internal static class ItemDatabaseSqliteBuilder
             }
             await connection.CloseAsync();
             File.Move(temporaryPath, fullOutputPath, true);
-            return new ItemDatabaseImportResult(found, unavailable);
+            return new ItemDatabaseImportResult(found, unavailable, skipped);
         }
         finally
         {

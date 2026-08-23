@@ -41,6 +41,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private readonly StartupRegistrationService _startupRegistration;
     private readonly DesktopNotificationService _notifications;
     private readonly GitHubUpdateService _appUpdates;
+    private readonly BackupService _backupService;
+    private readonly AppLogService _logService;
     private readonly DispatcherTimer _syncFreshnessTimer;
     private readonly DispatcherTimer _localDiscoveryTimer;
     private readonly DispatcherTimer _accountingFileChangeTimer;
@@ -59,6 +61,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private string _loginStatus = string.Empty;
     private string _headerText = "Sign in required";
     private string _statusDetail = "Connect a TradeSkillMaster account to continue";
+    private BackupEntry? _selectedBackup;
+    private string _backupStatus = "Backups have not been loaded.";
+    private string _logText = string.Empty;
+    private string _logStatus = "Logs have not been loaded.";
     private int _selectedTab = 2;
     private int _lastContentTab = 2;
     private TsmAccount? _selectedAccount;
@@ -147,6 +153,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         StartupRegistrationService startupRegistration,
         DesktopNotificationService notifications,
         GitHubUpdateService appUpdates,
+        BackupService backupService,
+        AppLogService logService,
         AppSettings settings)
     {
         _paths = paths;
@@ -166,6 +174,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         _startupRegistration = startupRegistration;
         _notifications = notifications;
         _appUpdates = appUpdates;
+        _backupService = backupService;
+        _logService = logService;
         Settings = settings;
         _selectedAccountingPlayer = settings.SelectedAccountingPlayer;
         _selectedAuctionRealm = settings.SelectedAuctionRealm;
@@ -211,6 +221,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             () => !IsBusy && IsLoggedIn && _installations.Count > 0);
         ShowAccountingCommand = new DelegateCommand(() => ShowContentPage(2));
         ShowAuctionHouseCommand = new DelegateCommand(() => ShowContentPage(3));
+        ShowLogsCommand = new DelegateCommand(() => ShowContentPage(4));
+        RefreshLogsCommand = new DelegateCommand(() => RefreshLogs());
         RefreshAuctionIndexCommand = new DelegateCommand(LoadAuctionIndex);
         ToggleAuctionFavoritesFilterCommand = new DelegateCommand(ToggleAuctionFavoritesFilter);
         ToggleAdvancedAuctionFiltersCommand = new DelegateCommand(ToggleAdvancedAuctionFilters);
@@ -229,6 +241,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             () => !IsCheckingForUpdates && !IsInstallingUpdate);
         InstallUpdateCommand = new AsyncCommand(InstallUpdateAsync,
             () => AvailableAppUpdate is not null && !IsCheckingForUpdates && !IsInstallingUpdate);
+        RefreshBackupsCommand = new AsyncCommand(RefreshBackupsAsync, () => !IsBusy && IsLoggedIn);
+        CreateBackupCommand = new AsyncCommand(CreateBackupsAsync, () => !IsBusy);
+        UploadLogCommand = new AsyncCommand(UploadLogAsync,
+            () => !IsBusy && IsLoggedIn && Settings.UploadAddonData);
 
         RefreshLocalData();
     }
@@ -246,21 +262,45 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         var credentialStore = new NativeLoginCredentialStore();
         var backgroundSync = new BackgroundSyncScheduler(AutomaticSyncInterval);
         var syncService = new AppDataSyncService(apiClient, appDataParser,
-            new AppDataFileWriter(appDataParser), accountingService);
+            new AppDataFileWriter(appDataParser), accountingService, dataUploader:
+            new TsmDataUploadService(apiClient, savedVariablesParser, () => settings.UploadSystemId),
+            uploadsEnabled: () => settings.UploadAddonData);
         var itemDatabase = new ItemDatabaseService();
+        var backupService = new BackupService(paths, apiClient, () => settings.UploadSystemId);
+        var logService = new AppLogService(paths);
+        logService.WriteSync("info", "TSM Desktop started.");
         return new MainWindowViewModel(paths, settingsStore, wowService,
             accountingService,
             new RealmDataService(savedVariablesParser, appDataParser),
             new AuctionHouseService(appDataParser, savedVariablesParser), new AuctionPriceHistoryStore(paths),
             itemDatabase, new ItemIconService(paths, itemDatabase: itemDatabase), apiClient, syncService,
             credentialStore, backgroundSync, new StartupRegistrationService(),
-            new DesktopNotificationService(), new GitHubUpdateService(), settings);
+            new DesktopNotificationService(), new GitHubUpdateService(), backupService, logService, settings);
     }
 
     public AppSettings Settings { get; }
     public ObservableCollection<RealmStatusRow> RealmStatuses { get; } = [];
     public ObservableCollection<AddonStatusRow> AddonStatuses { get; } = [];
     public ObservableCollection<TsmAccount> AccountingAccounts { get; } = [];
+    public ObservableCollection<BackupEntry> Backups { get; } = [];
+    public BackupEntry? SelectedBackup
+    {
+        get => _selectedBackup;
+        set => SetProperty(ref _selectedBackup, value);
+    }
+    public string BackupStatus { get => _backupStatus; private set => SetProperty(ref _backupStatus, value); }
+    public string LogText
+    {
+        get => _logText;
+        private set
+        {
+            if (SetProperty(ref _logText, value))
+                OnPropertyChanged(nameof(HasLogEntries));
+        }
+    }
+    public bool HasLogEntries => LogText.Length > 0;
+    public string LogStatus { get => _logStatus; private set => SetProperty(ref _logStatus, value); }
+    public bool IsPremium => _apiClient.IsPremium;
     public ObservableCollection<string> AccountingRealms { get; } = [];
     public IReadOnlyList<string> AccountingPlayers
     {
@@ -433,6 +473,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 AddRealmCommand.RaiseCanExecuteChanged();
                 RemoveRealmCommand.RaiseCanExecuteChanged();
                 SyncManagedRealmsCommand.RaiseCanExecuteChanged();
+                RefreshBackupsCommand?.RaiseCanExecuteChanged();
+                UploadLogCommand?.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(IsPremium));
                 CheckAddonUpdatesCommand.RaiseCanExecuteChanged();
             }
         }
@@ -515,6 +558,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             RemoveRealmCommand.RaiseCanExecuteChanged();
             SyncManagedRealmsCommand.RaiseCanExecuteChanged();
             CheckAddonUpdatesCommand.RaiseCanExecuteChanged();
+            RefreshBackupsCommand?.RaiseCanExecuteChanged();
+            CreateBackupCommand?.RaiseCanExecuteChanged();
+            UploadLogCommand?.RaiseCanExecuteChanged();
         }
     }
     public string Password { get => _password; set => SetProperty(ref _password, value); }
@@ -533,6 +579,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             OnPropertyChanged(nameof(IsAddonVersionsSelected));
             OnPropertyChanged(nameof(IsAccountingSelected));
             OnPropertyChanged(nameof(IsAuctionHouseSelected));
+            OnPropertyChanged(nameof(IsLogsSelected));
             OnPropertyChanged(nameof(IsSettingsSelected));
             OnPropertyChanged(nameof(CurrentPageTitle));
             if (value == 2)
@@ -541,19 +588,23 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 ResumeAuctionIconLoading();
             else
                 SuspendAuctionIconLoading();
+            if (value == 4 && !IsSettingsOpen)
+                RefreshLogs();
         }
     }
     public bool IsRealmDataSelected => SelectedTab == 0;
     public bool IsAddonVersionsSelected => SelectedTab == 1;
     public bool IsAccountingSelected => SelectedTab == 2;
     public bool IsAuctionHouseSelected => SelectedTab == 3;
-    public bool IsSettingsSelected => SelectedTab == 4 && IsSettingsOpen;
+    public bool IsLogsSelected => SelectedTab == 4 && !IsSettingsOpen;
+    public bool IsSettingsSelected => IsSettingsOpen;
     public string CurrentPageTitle => IsSettingsOpen ? "Settings" : SelectedTab switch
     {
         0 => "Realm data",
         1 => "Addons",
         2 => "Accounting",
         3 => "Auction House",
+        4 => "Logs",
         _ => "TSM Desktop"
     };
     public TsmAccount? SelectedAccount
@@ -867,6 +918,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public AsyncCommand CheckAddonUpdatesCommand { get; }
     public DelegateCommand ShowAccountingCommand { get; }
     public DelegateCommand ShowAuctionHouseCommand { get; }
+    public DelegateCommand ShowLogsCommand { get; }
+    public DelegateCommand RefreshLogsCommand { get; }
     public DelegateCommand RefreshAuctionIndexCommand { get; }
     public DelegateCommand ToggleAuctionFavoritesFilterCommand { get; }
     public DelegateCommand ToggleAdvancedAuctionFiltersCommand { get; }
@@ -885,6 +938,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public AsyncCommand SyncManagedRealmsCommand { get; private set; } = null!;
     public AsyncCommand CheckForUpdatesCommand { get; }
     public AsyncCommand InstallUpdateCommand { get; }
+    public AsyncCommand RefreshBackupsCommand { get; }
+    public AsyncCommand CreateBackupCommand { get; }
+    public AsyncCommand UploadLogCommand { get; }
 
     public void SetWowPath(string path)
     {
@@ -1215,12 +1271,118 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private async Task OpenSettingsAsync()
     {
-        if (SelectedTab is >= 0 and <= 3)
+        if (SelectedTab is >= 0 and <= 4)
             _lastContentTab = SelectedTab;
-        SelectedTab = 4;
         IsSettingsOpen = true;
         if (_apiClient.IsAuthenticated)
-            await LoadAvailableRealmsAsync();
+            await Task.WhenAll(LoadAvailableRealmsAsync(), RefreshBackupsAsync());
+    }
+
+    private async Task RefreshBackupsAsync()
+    {
+        BackupStatus = "Checking local and cloud backups…";
+        try
+        {
+            var accounts = _accountingService.FindAccounts(_wowService.Discover(Settings.WowPath));
+            var entries = await _backupService.SyncAsync(accounts,
+                Settings.UploadAddonData && _apiClient.IsPremium);
+            Backups.Clear();
+            foreach (var entry in entries)
+                Backups.Add(entry);
+            SelectedBackup = Backups.FirstOrDefault();
+            BackupStatus = _apiClient.IsPremium
+                ? $"{Backups.Count} backup(s) available. Cloud synchronization is { (Settings.UploadAddonData ? "enabled" : "disabled") }."
+                : $"{Backups.Count} local backup(s). Cloud backups require TSM Premium.";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            BackupStatus = $"Could not refresh backups: {exception.Message}";
+        }
+    }
+
+    private async Task CreateBackupsAsync()
+    {
+        IsBusy = true;
+        try
+        {
+            var accounts = _accountingService.FindAccounts(_wowService.Discover(Settings.WowPath));
+            _backupService.CreateAllNow(accounts);
+            await RefreshBackupsAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            BackupStatus = $"Could not create backups: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public async Task RestoreSelectedBackupAsync()
+    {
+        if (SelectedBackup is null)
+            return;
+        IsBusy = true;
+        try
+        {
+            var accounts = _accountingService.FindAccounts(_wowService.Discover(Settings.WowPath));
+            await _backupService.RestoreAsync(SelectedBackup, accounts,
+                Settings.UploadAddonData && _apiClient.IsPremium);
+            BackupStatus = $"Restored {SelectedBackup.Account} from {SelectedBackup.CreatedText}. Restart WoW before using the restored data.";
+            RefreshLocalData();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            BackupStatus = $"Could not restore backup: {exception.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task UploadLogAsync()
+    {
+        if (!Settings.UploadAddonData)
+        {
+            LogStatus = "Uploads are disabled in Advanced settings.";
+            return;
+        }
+        var log = _logService.ReadSyncLog();
+        if (string.IsNullOrWhiteSpace(log))
+        {
+            LogStatus = "There are no synchronization logs to upload.";
+            return;
+        }
+        IsBusy = true;
+        try
+        {
+            LogStatus = "Uploading synchronization log to TradeSkillMaster…";
+            await _apiClient.UploadLogAsync(log);
+            _logService.WriteSync("info", "Synchronization log uploaded to TradeSkillMaster.");
+            LogStatus = "Synchronization log uploaded. Application errors remained local.";
+            RefreshLogs(false);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logService.WriteSync("error", $"Synchronization log upload failed: {exception.Message}");
+            LogStatus = $"Could not upload synchronization log: {exception.Message}";
+            RefreshLogs(false);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    public string GetLogExportText() => _logService.ReadCombined(false);
+
+    private void RefreshLogs(bool updateStatus = true)
+    {
+        LogText = _logService.ReadForDisplay();
+        if (updateStatus)
+            LogStatus = LogText.Length == 0 ? "No log entries yet." : "Showing the latest sync and application logs.";
     }
 
     private async Task LoadAvailableRealmsAsync()
@@ -1438,12 +1600,27 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         StatusDetail = "Checking for updated TSM realm data…";
+        _logService.WriteSync("info", "Sync started.");
         try
         {
             var installations = _wowService.Discover(Settings.WowPath);
             var accounts = _accountingService.FindAccounts(installations);
             var result = await _syncService.SyncAsync(installations, accounts,
                 Settings.ReleaseChannel, cancellationToken);
+            try
+            {
+                var backups = await _backupService.SyncAsync(accounts,
+                    Settings.UploadAddonData && _apiClient.IsPremium, cancellationToken);
+                Backups.Clear();
+                foreach (var backup in backups)
+                    Backups.Add(backup);
+                SelectedBackup = Backups.FirstOrDefault();
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                BackupStatus = $"Backup synchronization failed: {exception.Message}";
+                _logService.WriteSync("warning", BackupStatus);
+            }
             RefreshLocalData();
             ShowSyncNotifications(result);
             if (result.Errors.Count == 0)
@@ -1456,6 +1633,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             {
                 StatusDetail = $"Synced {result.DownloadedEntries} data set(s); " +
                                $"{result.Errors.Count} issue(s): {result.Errors[0]}";
+                foreach (var error in result.Errors)
+                    _logService.WriteSync("warning", error);
             }
             else if (result.WrittenFiles == 0)
             {
@@ -1463,10 +1642,18 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             }
             else
             {
+                var uploadStatus = Settings.UploadAddonData
+                    ? $"; uploaded {result.UploadedDataSets} data set(s)"
+                    : "; addon uploads disabled";
                 StatusDetail = result.DownloadedEntries == 0
-                    ? $"Realm data is current ({result.WrittenFiles} AppHelper installation(s))"
-                    : $"Downloaded {result.DownloadedEntries} data set(s) into {result.WrittenFiles} AppHelper installation(s)";
+                    ? $"Realm data is current ({result.WrittenFiles} AppHelper installation(s)){uploadStatus}"
+                    : $"Downloaded {result.DownloadedEntries} data set(s) into {result.WrittenFiles} AppHelper installation(s){uploadStatus}";
             }
+            _logService.WriteSync(result.Errors.Count == 0 ? "info" : "warning",
+                $"Sync finished: {result.DownloadedEntries} downloaded, {result.WrittenFiles} AppHelper file(s) written, " +
+                $"{result.UploadedDataSets} uploaded, {result.Errors.Count} issue(s).");
+            if (IsLogsSelected)
+                RefreshLogs(false);
         }
         catch (HttpRequestException exception) when (
             allowReauthentication &&
@@ -1481,10 +1668,14 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             _apiClient.Logout();
             IsLoggedIn = false;
             LoginError = "Your saved login is no longer valid. Enter your password to sign in again.";
+            _logService.WriteSync("error", LoginError);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             StatusDetail = $"Data sync failed: {exception.Message}";
+            _logService.WriteSync("error", StatusDetail);
+            if (IsLogsSelected)
+                RefreshLogs(false);
         }
     }
 

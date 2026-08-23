@@ -111,9 +111,15 @@ The current bundled catalog covers active Anniversary TBC items. Flavors not yet
 
 If the Auction House is empty, verify that AppHelper is installed and synchronize the realm again. Online Wowhead enrichment can be disabled under **Settings → Advanced** without disabling local prices.
 
-### Accounting statistics and export
+### Accounting statistics
 
-Open **Accounting**, then choose an account, realm, player, and time range. The app reads the local TradeSkillMaster SavedVariables file and shows recorded character gold, sales and purchases, profit, daily activity, and top items. It does not upload this history.
+Open **Accounting**, then choose an account, realm, player, and time range. The app reads the local TradeSkillMaster SavedVariables file and shows recorded character gold, sales and purchases, profit, daily activity, and top items.
+
+By default, a signed-in sync mirrors the official desktop application's SavedVariables uploads to TradeSkillMaster: AuctionDB scans, Accounting auction events, Black Market data, groups and shopping prices, analytics, error reports, and the normalized TSM/AppHelper databases. Settings → Advanced → **Upload addon data to TradeSkillMaster** disables all of these uploads. TradeSkillMaster's legacy upload API is only available over plain HTTP, so both the upload and authenticated session token are unencrypted in transit. Use the upload option only on a trusted network. HTTPS certificate validation is bypassed only for TradeSkillMaster-owned hosts for compatibility with its legacy client; GitHub, Blizzard, Wowhead, and other connections retain normal certificate validation.
+
+The Backups settings tab creates compressed local copies of `TradeSkillMaster.lua` and `TradeSkillMaster_AppHelper.lua` at most once per hour when the files have changed. Local backups are retained for 30 days. Premium TSM accounts synchronize these archives with TSM when addon uploads are enabled and can restore backups created on another computer. A fresh local safety backup is always created before restoration, and WoW must be closed. Accounting CSV export is intentionally not included.
+
+The Logs workspace records synchronization starts, results, uploads, warnings, and failures alongside captured application errors. Both log sources can be viewed locally and saved through the platform file picker. Uploading sends only the synchronization log to TradeSkillMaster when addon uploads are enabled; application errors, stack traces, and system diagnostics remain local.
 
 The chart uses TSM's recorded per-character gold snapshots. Sales and purchase totals use TSM's local Accounting transaction history, so the page only contains periods captured by the addon. Money transfers, repair bills, and postage are excluded from auction earnings and spending.
 
@@ -275,15 +281,19 @@ dotnet run --project TSM.ItemDatabaseBuilder -- \
 
 Discovery and item fetching are resumable through the JSONL output. Keeping the discovered ID file makes later database rebuilds reproducible even if Blizzard's search index changes.
 
+For large Retail catalogs, add `--auction-items-only`. Discovery rejects poor-quality and non-auction item classes directly from Blizzard's search results. The remaining item details are checked for bind-on-pickup, quest-bound, and account-bound status before the separate media request is made. Rejected detail IDs are stored in an adjacent `.excluded-ids` checkpoint instead of the JSONL, so an interrupted run resumes without downloading them again. This keeps the Retail source focused on auctionable items and avoids both the media request and large response payload for rejected records.
+
 Convert one or more completed JSONL catalogs into the release SQLite database without API credentials:
 
 ```bash
 dotnet run --project TSM.ItemDatabaseBuilder -- \
   --import-jsonl artifacts/item-data/tbc-anniversary.jsonl \
+  --import-jsonl artifacts/item-data/mop-classic.jsonl \
+  --import-jsonl artifacts/item-data/retail.jsonl \
   --database TSM/Assets/items.db
 ```
 
-Repeat `--import-jsonl` for each flavor when rebuilding the combined database. Queryable fields are stored as indexed SQLite columns. The larger structured preview payload is Brotli-compressed per item so opening one tooltip does not load the full catalog into memory.
+Include every flavor source in the same command when rebuilding the combined database. The packaged SQLite catalog filters poor-quality vendor trash, the non-auction Money, Quest, Key, and Permanent item classes, and items Blizzard marks as bind-on-pickup, quest-bound, account-bound, or Battle.net-account-bound. Bind-on-equip, bind-on-use, and unbound items remain available. JSONL sources built without `--auction-items-only` remain complete, making the packaging filter reversible; the optimized Retail mode intentionally omits rejected records. Queryable fields are stored as indexed SQLite columns. The larger structured preview payload is Brotli-compressed per item so opening one tooltip does not load the full catalog into memory.
 
 Pushing a version tag such as `v0.2.0` runs the release workflow and publishes a Windows x64 setup executable, a macOS Apple Silicon DMG, a Linux x64 AppImage, and portable ZIPs used by the automatic updater. Older temporary workflow artifacts are removed after a successful release; GitHub Release downloads are retained.
 

@@ -98,4 +98,20 @@ public sealed record DataSyncResult(
     int NewsId = 0,
     string NewsMessage = "",
     int LatestAppVersion = 0,
-    IReadOnlyList<string>? UpdatedAddons = null);
+    IReadOnlyList<string>? UpdatedAddons = null,
+    int UploadedDataSets = 0);
+
+public sealed record TsmUploadRequest(
+    string Endpoint,
+    IReadOnlyList<string> Path,
+    object Data,
+    bool BinaryContent = false);
+
+public sealed record TsmRemoteBackup(string SystemId, string Account, long Timestamp, bool Keep)
+{
+    public string RemoteName => $"{SystemId}_{Account}_{Timestamp}.zip";
+}
+
+public sealed record TsmBackupCatalog(
+    IReadOnlyList<TsmRemoteBackup> Backups,
+    IReadOnlySet<string> MissingNames);

@@ -12,6 +12,8 @@ namespace TSM.Services;
 public interface ITsmApiClient
 {
     bool IsAuthenticated { get; }
+    bool IsPremium { get; }
+    bool SupportsEndpoint(string endpoint);
     Task<ApiLoginResult> LoginAsync(string email, string password, CancellationToken cancellationToken = default);
     Task<TsmStatusResponse> GetStatusAsync(string channel, CancellationToken cancellationToken = default);
     Task<string> DownloadDataAsync(string url, CancellationToken cancellationToken = default);
@@ -20,6 +22,13 @@ public interface ITsmApiClient
     Task AddRealmAsync(string gameVersion, string realmId, CancellationToken cancellationToken = default);
     Task RemoveRealmAsync(string gameVersion, string region, string realmName,
         CancellationToken cancellationToken = default);
+    Task<long> GetLastUploadAsync(string endpoint, IReadOnlyList<string> path,
+        CancellationToken cancellationToken = default);
+    Task UploadAsync(TsmUploadRequest upload, CancellationToken cancellationToken = default);
+    Task<TsmBackupCatalog> GetBackupsAsync(CancellationToken cancellationToken = default);
+    Task<byte[]> DownloadBackupAsync(string remoteName, CancellationToken cancellationToken = default);
+    Task UploadBackupAsync(string remoteName, byte[] archive, CancellationToken cancellationToken = default);
+    Task UploadLogAsync(string log, bool crash = false, CancellationToken cancellationToken = default);
     void Logout();
 }
 
@@ -41,6 +50,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
     private readonly Func<long> _unixTime;
     private readonly bool _ownsClient;
     private string _session = string.Empty;
+    private bool _isPremium;
     private Dictionary<string, string> _endpointSubdomains = new(StringComparer.OrdinalIgnoreCase);
 
     public TsmLegacyApiClient(
@@ -53,13 +63,19 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient(new HttpClientHandler
         {
-            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate
+            AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+            ServerCertificateCustomValidationCallback = (request, _, _, errors) =>
+                errors == System.Net.Security.SslPolicyErrors.None ||
+                IsTsmHost(request.RequestUri?.Host)
         });
         _httpClient.Timeout = TimeSpan.FromSeconds(120);
         _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd($"TSMApplication/{ApplicationVersion}");
     }
 
     public bool IsAuthenticated => _session.Length > 0;
+    public bool IsPremium => _isPremium;
+    public bool SupportsEndpoint(string endpoint) => endpoint is "auth" or "log" or "realms2" ||
+                                                     _endpointSubdomains.ContainsKey(endpoint);
 
     public async Task<ApiLoginResult> LoginAsync(
         string email,
@@ -102,6 +118,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
                 return new ApiLoginResult(false, "The TSM service returned no session.");
 
             _session = userInfo.Session;
+            _isPremium = userInfo.IsPremium;
             _endpointSubdomains = userInfo.EndpointSubdomains ?? new Dictionary<string, string>();
             return new ApiLoginResult(true, userInfo.IsPremium ? "Signed in · Premium" : "Signed in");
         }
@@ -294,6 +311,93 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
         await SendRealmSelectionAsync(["realms2", "remove", gameVersion, region, realmName], cancellationToken);
     }
 
+    public async Task<long> GetLastUploadAsync(string endpoint, IReadOnlyList<string> path,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureUploadEndpoint(endpoint);
+        using var response = await SendApiAsync(HttpMethod.Get, ResolveSubdomain(endpoint),
+            [endpoint, .. path], null, string.Empty, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return document.RootElement.TryGetProperty("lastUpload", out var value) && value.TryGetInt64(out var timestamp)
+            ? timestamp
+            : 0;
+    }
+
+    public async Task UploadAsync(TsmUploadRequest upload, CancellationToken cancellationToken = default)
+    {
+        EnsureUploadEndpoint(upload.Endpoint);
+        using var response = await SendApiAsync(HttpMethod.Post, ResolveSubdomain(upload.Endpoint),
+            [upload.Endpoint, .. upload.Path], upload.Data, string.Empty, cancellationToken,
+            contentType: upload.BinaryContent ? "application/octet-stream" : "application/json");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<TsmBackupCatalog> GetBackupsAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureLegacyApiAvailable();
+        using var response = await SendApiAsync(HttpMethod.Get, ResolveSubdomain("backup"), ["backup"], null,
+            string.Empty, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var backups = new List<TsmRemoteBackup>();
+        if (document.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object)
+        foreach (var group in data.EnumerateObject())
+        {
+            var separator = group.Name.IndexOf('_');
+            if (separator <= 0 || group.Value.ValueKind != JsonValueKind.Array)
+                continue;
+            var systemId = group.Name[..separator];
+            var account = group.Name[(separator + 1)..];
+            foreach (var entry in group.Value.EnumerateArray())
+            {
+                if (!entry.TryGetProperty("timestamp", out var timestamp) || !timestamp.TryGetInt64(out var value))
+                    continue;
+                var keep = entry.TryGetProperty("keep", out var keepValue) && keepValue.ValueKind == JsonValueKind.True;
+                backups.Add(new TsmRemoteBackup(systemId, account, value, keep));
+            }
+        }
+        var missing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (document.RootElement.TryGetProperty("missing", out var missingValue) &&
+            missingValue.ValueKind == JsonValueKind.Array)
+        foreach (var entry in missingValue.EnumerateArray())
+        {
+            if (entry.ValueKind == JsonValueKind.String && entry.GetString() is { Length: > 0 } name)
+                missing.Add(name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? name : name + ".zip");
+        }
+        return new TsmBackupCatalog(backups, missing);
+    }
+
+    public async Task<byte[]> DownloadBackupAsync(string remoteName, CancellationToken cancellationToken = default)
+    {
+        ValidateArchiveName(remoteName);
+        using var response = await SendApiAsync(HttpMethod.Get, ResolveSubdomain("backup"),
+            ["backup", EncodePath(remoteName)], null, string.Empty, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+    }
+
+    public async Task UploadBackupAsync(string remoteName, byte[] archive,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateArchiveName(remoteName);
+        using var response = await SendApiAsync(HttpMethod.Post, ResolveSubdomain("backup"),
+            ["backup", EncodePath(remoteName)], archive, string.Empty, cancellationToken,
+            contentType: "application/octet-stream");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UploadLogAsync(string log, bool crash = false, CancellationToken cancellationToken = default)
+    {
+        EnsureLegacyApiAvailable();
+        using var response = await SendApiAsync(HttpMethod.Post, "app-server",
+            ["log", crash ? "crash" : "user"], log, string.Empty, cancellationToken,
+            contentType: "text/plain");
+        response.EnsureSuccessStatusCode();
+    }
+
     private async Task UpdateRealmSelectionAsync(
         string action,
         string gameVersion,
@@ -340,6 +444,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
     public void Logout()
     {
         _session = string.Empty;
+        _isPremium = false;
         _endpointSubdomains.Clear();
     }
 
@@ -357,7 +462,8 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
         object? body,
         string channel,
         CancellationToken cancellationToken,
-        string tsmVersion = "")
+        string tsmVersion = "",
+        string contentType = "application/json")
     {
         EnsureAllowedSubdomain(subdomain);
         var timestamp = _unixTime();
@@ -381,13 +487,23 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
         var request = new HttpRequestMessage(method, uri);
         if (body is not null)
         {
-            var raw = JsonSerializer.SerializeToUtf8Bytes(body, JsonOptions);
-            using var buffer = new MemoryStream();
-            using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, true))
-                gzip.Write(raw);
-            request.Content = new ByteArrayContent(buffer.ToArray());
-            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-            request.Content.Headers.ContentEncoding.Add("gzip");
+            var raw = body switch
+            {
+                byte[] bytes => bytes,
+                string text => Encoding.UTF8.GetBytes(text),
+                _ => JsonSerializer.SerializeToUtf8Bytes(body, JsonOptions)
+            };
+            if (body is byte[])
+                request.Content = new ByteArrayContent(raw);
+            else
+            {
+                using var buffer = new MemoryStream();
+                using (var gzip = new GZipStream(buffer, CompressionLevel.Fastest, true))
+                    gzip.Write(raw);
+                request.Content = new ByteArrayContent(buffer.ToArray());
+                request.Content.Headers.ContentEncoding.Add("gzip");
+            }
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         }
         return await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
     }
@@ -426,6 +542,27 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
             throw new InvalidOperationException("The service returned an invalid endpoint name.");
     }
 
+    private static void EnsureUploadEndpoint(string endpoint)
+    {
+        if (!UploadEndpoints.Contains(endpoint))
+            throw new InvalidOperationException("Unsupported TSM upload endpoint.");
+    }
+
+    private static string EncodePath(string value) => Convert.ToBase64String(Encoding.ASCII.GetBytes(value))
+        .Replace('+', '-').Replace('/', '_');
+
+    private static void ValidateArchiveName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 240 ||
+            !value.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+            value.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or '#')))
+            throw new InvalidOperationException("Invalid backup archive name.");
+    }
+
+    private static bool IsTsmHost(string? host) => host is not null &&
+        (host.Equals("tradeskillmaster.com", StringComparison.OrdinalIgnoreCase) ||
+         host.EndsWith(".tradeskillmaster.com", StringComparison.OrdinalIgnoreCase));
+
     private static async Task<T> DeserializeAsync<T>(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -438,6 +575,10 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
 
     private static IReadOnlySet<string> AllowedGameVersions { get; } =
         new HashSet<string>(["retail", "bcc", "classic", "anniversary"], StringComparer.OrdinalIgnoreCase);
+
+    private static IReadOnlySet<string> UploadEndpoints { get; } =
+        new HashSet<string>(["auctiondb_scan", "black_market", "sales", "groups", "analytics", "error_report", "sv"],
+            StringComparer.Ordinal);
 
     private static string SafeMessage(HttpRequestException exception) =>
         exception.StatusCode is { } statusCode ? $"server returned {(int)statusCode}." : "could not reach the service.";

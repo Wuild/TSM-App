@@ -56,6 +56,39 @@ public static class NativeConfirmationService
         return null;
     }
 
+    public static async Task<bool?> ConfirmRestoreAsync(Window owner, string account)
+    {
+        var message = $"The current TSM SavedVariables for {account} will be backed up and replaced. World of Warcraft must be closed.";
+        if (OperatingSystem.IsWindows())
+        {
+            var handle = owner.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
+            return MessageBox(handle, message, "Restore TSM backup?",
+                MbYesNo | MbIconQuestion | MbDefaultButton2) == IdYes;
+        }
+        if (OperatingSystem.IsMacOS())
+            return await RunDialogAsync("osascript",
+            [
+                "-e",
+                $"display alert \"Restore TSM backup?\" message \"{message.Replace("\"", "\\\"")}\" as warning buttons {{\"Cancel\", \"Restore\"}} default button \"Cancel\" cancel button \"Cancel\""
+            ]);
+        if (OperatingSystem.IsLinux())
+        {
+            var result = await RunDialogAsync("zenity",
+            [
+                "--question", "--title=Restore TSM backup?", $"--text={message}",
+                "--ok-label=Restore", "--cancel-label=Cancel", "--default-cancel", "--icon-name=tsm-desktop"
+            ]);
+            if (result is not null)
+                return result;
+            return await RunDialogAsync("kdialog",
+            [
+                "--title", "Restore TSM backup?", "--warningyesno", message,
+                "--yes-label", "Restore", "--no-label", "Cancel"
+            ]);
+        }
+        return null;
+    }
+
     private static async Task<bool?> RunDialogAsync(string executable, IReadOnlyList<string> arguments)
     {
         try

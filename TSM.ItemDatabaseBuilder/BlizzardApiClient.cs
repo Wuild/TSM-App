@@ -41,10 +41,11 @@ internal sealed class BlizzardApiClient : IDisposable
         CancellationToken cancellationToken) =>
         await GetAsync($"/data/wow/media/item/{itemId}", apiNamespace, cancellationToken);
 
-    public async Task<IReadOnlyList<long>> DiscoverItemIdsAsync(string apiNamespace,
+    public async Task<IReadOnlyList<long>> DiscoverItemIdsAsync(string apiNamespace, bool auctionItemsOnly,
         CancellationToken cancellationToken)
     {
         var ids = new SortedSet<long>();
+        var filtered = 0;
         var minimumId = 1L;
         var batch = 0;
         while (minimumId <= int.MaxValue)
@@ -55,21 +56,25 @@ internal sealed class BlizzardApiClient : IDisposable
             if (document is null || !document.RootElement.TryGetProperty("results", out var results) ||
                 results.ValueKind != JsonValueKind.Array)
                 break;
-            var previousCount = ids.Count;
             var greatestId = minimumId - 1;
             foreach (var result in results.EnumerateArray())
             {
-                if (result.TryGetProperty("data", out var data) && data.TryGetProperty("id", out var id) &&
-                    id.TryGetInt64(out var value) && value > 0)
+                if (!result.TryGetProperty("data", out var data) || !data.TryGetProperty("id", out var id) ||
+                    !id.TryGetInt64(out var value) || value <= 0)
+                    continue;
+                greatestId = Math.Max(greatestId, value);
+                if (auctionItemsOnly && !AuctionItemFilter.IsSearchCandidate(data))
                 {
-                    ids.Add(value);
-                    greatestId = Math.Max(greatestId, value);
+                    filtered++;
+                    continue;
                 }
+                ids.Add(value);
             }
-            Console.Write($"\rDiscovering item IDs: batch {batch:N0} · {ids.Count:N0} items");
+            Console.Write($"\rDiscovering item IDs: batch {batch:N0} · {ids.Count:N0} candidates" +
+                          (auctionItemsOnly ? $" · {filtered:N0} filtered" : string.Empty));
             if (results.GetArrayLength() == 0)
                 break;
-            if (ids.Count == previousCount || greatestId < minimumId)
+            if (greatestId < minimumId)
                 throw new InvalidDataException("Blizzard item search did not advance to the next ID range.");
             minimumId = greatestId + 1;
         }

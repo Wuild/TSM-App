@@ -18,6 +18,9 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("redirects second launches to the primary app instance", EnforceSingleInstance),
     ("blocks legacy authentication when its transport is disabled", LegacyAuthenticationCanBeDisabled),
     ("authenticates and differentially syncs AppData atomically", AuthenticateAndSyncAppData),
+    ("uploads current TSM SavedVariables data by endpoint", UploadTsmData),
+    ("creates synchronizes and restores Premium backups", PremiumBackups),
+    ("records and combines sync and application logs", Run(CombineApplicationLogs)),
     ("syncs faction-qualified anniversary realm data", SyncFactionQualifiedRealm),
     ("discovers PTR client variants", Run(DiscoverPtrVariants)),
     ("detects newly installed clients and local accounts", Run(DetectLocalInstallationChanges)),
@@ -350,6 +353,16 @@ static void QueryBundledItemDatabase()
         }, "bundled TBC item fields were incomplete");
     Assert(service.Get("i:30038", "bcc")?.Name == "Belt of Blasting",
         "the bcc flavor did not resolve to the TBC database partition");
+    var mopMount = service.Get("i:95416", "Progression");
+    Assert(mopMount is { Name: "Sky Golem", Quality: 4, RequiredLevel: 80 },
+        "the bundled MoP database partition was missing or incomplete");
+    Assert(service.Get("i:95416", "Anniversary") is null,
+        "a MoP-only item leaked into the TBC database partition");
+    Assert(service.Get("i:76061", "Progression") is null,
+        "a bind-on-pickup MoP item was included in the auction catalog");
+    Assert(service.Get("i:25", "Retail") is
+        { Name: "Worn Shortsword", Quality: 1, ClassName: "Weapon", InventoryName: "Main Hand" },
+        "the bundled Retail database partition was missing or incomplete");
     Assert(ItemIconService.BuildItemPageUri("i:21943", "bcc")?.AbsoluteUri ==
            "https://www.wowhead.com/tbc/item=21943",
         "the bcc flavor did not resolve to TBC Wowhead");
@@ -746,6 +759,11 @@ static async Task AuthenticateAndSyncAppData()
         await client.RemoveRealmAsync(progressionRealm.GameVersion, progressionRealm.Region,
             progressionRealm.Name);
         Assert(handler.SawRealmRemove, "realm remove endpoint was not called with the selected region and name");
+        var uploadPath = new[] { "US", "RHJhZW5vcg==", "QUNDT1VOVCMx" };
+        Assert(await client.GetLastUploadAsync("sales", uploadPath) == 0,
+            "upload checkpoint was not read");
+        await client.UploadAsync(new TsmUploadRequest("sales", uploadPath, new object[] { new[] { 123L, 5000L } }));
+        Assert(handler.SawDataUpload, "SavedVariables data was not posted with the legacy upload contract");
 
         var parser = new AppDataCatalogParser();
         var accounting = new AccountingService(new LuaSavedVariablesParser());
@@ -865,6 +883,115 @@ static async Task AutomaticSyncCadence()
     }
 }
 
+static async Task UploadTsmData()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"tsm-upload-tests-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(root);
+    var tsmPath = Path.Combine(root, "TradeSkillMaster.lua");
+    var helperPath = Path.Combine(root, "TradeSkillMaster_AppHelper.lua");
+    File.WriteAllText(tsmPath, """
+        TradeSkillMasterDB = {
+          ["_scopeKeys"] = { ["realm"] = { "Draenor" }, ["factionrealm"] = { "Alliance - Draenor" } },
+          ["r@Draenor@internalData@csvSales"] = "itemString,price,stackSize,quantity,time,source\ni:123,5000,2,1,1700000000,Auction",
+          ["r@Draenor@internalData@saveTimeSales"] = "1700000010",
+          ["f@Alliance - Draenor@internalData@csvAuctionDBScan"] = "itemString,minBuyout,marketValue,numAuctions,quantity\ni:123,4000,4500,3,6",
+          ["f@Alliance - Draenor@internalData@auctionDBScanTime"] = 1700000020,
+        }
+        """);
+    File.WriteAllText(helperPath, """
+        TradeSkillMaster_AppHelperDB = {
+          ["region"] = "US",
+          ["blackMarket"] = { ["Draenor"] = { ["updateTime"] = 1700000030, ["data"] = "scan" } },
+          ["analytics"] = { ["updateTime"] = 1700000040, ["data"] = { [1] = "event" } },
+          ["errorReports"] = { ["updateTime"] = 1700000050, ["data"] = { [1] = "report" } },
+          ["shoppingMaxPrices"] = { ["Default"] = { ["updateTime"] = 1700000060, ["Group"] = "[123,5000]" } },
+        }
+        """);
+    var api = new FakeApiClient(new TsmStatusResponse());
+    var service = new TsmDataUploadService(api, new LuaSavedVariablesParser(), () => "test-system");
+    try
+    {
+        var account = new TsmAccount("ACCOUNT#1 · Retail", "ACCOUNT#1", "Retail", tsmPath, helperPath);
+        var count = await service.UploadAsync([account]);
+        var endpoints = api.Uploads.Select(upload => upload.Endpoint).ToHashSet(StringComparer.Ordinal);
+        Assert(count == 7 && endpoints.SetEquals(["auctiondb_scan", "sales", "black_market", "analytics",
+                "error_report", "groups", "sv"]),
+            "SavedVariables upload categories were incomplete");
+        api.Uploads.Clear();
+        api.UnsupportedEndpoints.Add("sales");
+        count = await service.UploadAsync([account]);
+        Assert(count == 6 && api.Uploads.All(upload => upload.Endpoint != "sales"),
+            "an upload endpoint omitted by the authenticated session was not skipped");
+        Assert(new AppSettings().UploadAddonData, "addon uploads should default to enabled");
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static async Task PremiumBackups()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"tsm-backup-tests-{Guid.NewGuid():N}");
+    var data = Path.Combine(root, "data");
+    var saved = Path.Combine(root, "SavedVariables");
+    Directory.CreateDirectory(saved);
+    var tsm = Path.Combine(saved, "TradeSkillMaster.lua");
+    var helper = Path.Combine(saved, "TradeSkillMaster_AppHelper.lua");
+    await File.WriteAllTextAsync(tsm, "TradeSkillMasterDB = { [\"value\"] = 1 }");
+    await File.WriteAllTextAsync(helper, "TradeSkillMaster_AppHelperDB = { [\"region\"] = \"US\" }");
+    var api = new FakeApiClient(new TsmStatusResponse());
+    var service = new BackupService(new AppPaths(data), api, () => "system");
+    var account = new TsmAccount("ACCOUNT#1 · Retail", "ACCOUNT#1", "Retail", tsm, helper);
+    try
+    {
+        var legacyCloudBackup = new BackupEntry("old-system", "ACCOUNT#1", 20260809012455446,
+            false, true, false);
+        Assert(legacyCloudBackup.Created.Year == 2026 && legacyCloudBackup.Created.Month == 8 &&
+               legacyCloudBackup.Created.Day == 9,
+            "legacy cloud backup timestamps were not parsed as compact dates");
+        var entries = await service.SyncAsync([account], true);
+        Assert(entries.Count == 1 && entries[0].IsLocal && entries[0].IsRemote && api.RemoteBackups.Count == 1,
+            "Premium backup did not synchronize to the cloud API");
+        await File.WriteAllTextAsync(tsm, "changed");
+        await service.RestoreAsync(entries[0], [account], true);
+        Assert((await File.ReadAllTextAsync(tsm)).Contains("TradeSkillMasterDB", StringComparison.Ordinal),
+            "local backup restore did not replace SavedVariables");
+    }
+    finally
+    {
+        Directory.Delete(root, true);
+    }
+}
+
+static void CombineApplicationLogs()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"tsm-log-tests-{Guid.NewGuid():N}");
+    var paths = new AppPaths(root);
+    try
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(paths.ErrorLogFile, "captured application failure");
+        var service = new AppLogService(paths);
+        service.WriteSync("info", "Downloaded realm data.");
+        var combined = service.ReadCombined();
+        Assert(combined.Contains("SYNC LOG", StringComparison.Ordinal) &&
+               combined.Contains("Downloaded realm data.", StringComparison.Ordinal) &&
+               combined.Contains("APPLICATION ERRORS", StringComparison.Ordinal) &&
+               combined.Contains("captured application failure", StringComparison.Ordinal),
+            "combined log output omitted sync or application entries");
+        var upload = service.ReadSyncLog();
+        Assert(upload.Contains("Downloaded realm data.", StringComparison.Ordinal) &&
+               !upload.Contains("captured application failure", StringComparison.Ordinal),
+            "the synchronization upload payload included local application errors");
+    }
+    finally
+    {
+        if (Directory.Exists(root))
+            Directory.Delete(root, true);
+    }
+}
+
 static string SavedVariablesFixture() =>
     """
     -- Representative TSM SavedVariables subset
@@ -900,6 +1027,7 @@ sealed class FakeTsmHandler : HttpMessageHandler
     public bool SawAddonVersion { get; private set; }
     public bool SawRealmAdd { get; private set; }
     public bool SawRealmRemove { get; private set; }
+    public bool SawDataUpload { get; private set; }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -911,7 +1039,7 @@ sealed class FakeTsmHandler : HttpMessageHandler
         if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath == "/v2/auth")
         {
             SawSignedApiRequest = HasSignature(uri.Query);
-            return Json("""{"session":"memory-only-session","isPremium":true,"endpointSubdomains":{"status":"app-server","addon":"app-server"}}""");
+            return Json("""{"session":"memory-only-session","isPremium":true,"endpointSubdomains":{"status":"app-server","addon":"app-server","sales":"app-server"}}""");
         }
 
         if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath == "/v2/status")
@@ -967,6 +1095,18 @@ sealed class FakeTsmHandler : HttpMessageHandler
             });
         }
 
+        if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath.StartsWith("/v2/sales/US/",
+                StringComparison.Ordinal))
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                SawDataUpload = request.Content?.Headers.ContentEncoding.Contains("gzip") == true &&
+                                request.Content.Headers.ContentType?.MediaType == "application/json";
+                return Json("""{"success":true}""");
+            }
+            return Json("""{"lastUpload":0}""");
+        }
+
         if (uri.Host == "data.example.test")
         {
             DataDownloadCount++;
@@ -1006,7 +1146,12 @@ sealed class FakeTsmHandler : HttpMessageHandler
 sealed class FakeApiClient(TsmStatusResponse status, byte[]? addonArchive = null) : ITsmApiClient
 {
     public byte[] AddonArchive { get; set; } = addonArchive ?? [];
+    public List<TsmUploadRequest> Uploads { get; } = [];
+    public Dictionary<string, byte[]> RemoteBackups { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> UnsupportedEndpoints { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IsAuthenticated => true;
+    public bool IsPremium => true;
+    public bool SupportsEndpoint(string endpoint) => !UnsupportedEndpoints.Contains(endpoint);
     public Task<ApiLoginResult> LoginAsync(string email, string password,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new ApiLoginResult(true, "Signed in"));
@@ -1027,6 +1172,39 @@ sealed class FakeApiClient(TsmStatusResponse status, byte[]? addonArchive = null
         CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task RemoveRealmAsync(string gameVersion, string region, string realmName,
+        CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+    public Task<long> GetLastUploadAsync(string endpoint, IReadOnlyList<string> path,
+        CancellationToken cancellationToken = default) => Task.FromResult(0L);
+
+    public Task UploadAsync(TsmUploadRequest upload,
+        CancellationToken cancellationToken = default)
+    {
+        Uploads.Add(upload);
+        return Task.CompletedTask;
+    }
+
+    public Task<TsmBackupCatalog> GetBackupsAsync(CancellationToken cancellationToken = default)
+    {
+        var backups = RemoteBackups.Keys.Select(name =>
+        {
+            var parts = Path.GetFileNameWithoutExtension(name).Split('_');
+            return new TsmRemoteBackup(parts[0], parts[1], long.Parse(parts[2]), false);
+        }).ToArray();
+        return Task.FromResult(new TsmBackupCatalog(backups, new HashSet<string>()));
+    }
+
+    public Task<byte[]> DownloadBackupAsync(string remoteName,
+        CancellationToken cancellationToken = default) => Task.FromResult(RemoteBackups[remoteName]);
+
+    public Task UploadBackupAsync(string remoteName, byte[] archive,
+        CancellationToken cancellationToken = default)
+    {
+        RemoteBackups[remoteName] = archive;
+        return Task.CompletedTask;
+    }
+
+    public Task UploadLogAsync(string log, bool crash = false,
         CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public void Logout() { }

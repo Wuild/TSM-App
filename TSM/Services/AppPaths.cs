@@ -12,12 +12,16 @@ public sealed class AppPaths
         SettingsFile = Path.Combine(DataDirectory, "settings.json");
         AuctionPriceHistoryFile = Path.Combine(DataDirectory, "auction-price-history.json");
         ErrorLogFile = Path.Combine(DataDirectory, "errors.log");
+        SyncLogFile = Path.Combine(DataDirectory, "sync.log");
         ItemIconDirectory = Path.Combine(DataDirectory, "ItemIcons");
+        BackupDirectory = Path.Combine(DataDirectory, "Backups");
     }
 
     public string DataDirectory { get; }
     public string SettingsFile { get; }
     public string AuctionPriceHistoryFile { get; }
     public string ErrorLogFile { get; }
+    public string SyncLogFile { get; }
     public string ItemIconDirectory { get; }
+    public string BackupDirectory { get; }
 }

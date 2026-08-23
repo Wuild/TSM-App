@@ -221,10 +221,10 @@ public sealed class ItemDatabaseService
         var value = flavor.Trim().ToLowerInvariant();
         if (value.Contains("anniversary", StringComparison.Ordinal) || value is "tbc" or "bcc")
             return "tbc";
-        if (value.Contains("era", StringComparison.Ordinal) || value.Contains("vanilla", StringComparison.Ordinal))
+        if (value is "classic" || value.Contains("era", StringComparison.Ordinal) ||
+            value.Contains("vanilla", StringComparison.Ordinal))
             return "vanilla";
-        if (value.Contains("classic", StringComparison.Ordinal) || value.Contains("progress", StringComparison.Ordinal) ||
-            value.Contains("mop", StringComparison.Ordinal))
+        if (value.Contains("progress", StringComparison.Ordinal) || value.Contains("mop", StringComparison.Ordinal))
             return "mop";
         return "retail";
     }

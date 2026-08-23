@@ -22,6 +22,7 @@ internal sealed class BuilderOptions
     public required string Locale { get; init; }
     public required IReadOnlyList<ItemCatalog> Catalogs { get; init; }
     public bool Refresh { get; init; }
+    public bool AuctionItemsOnly { get; init; }
     public int RequestsPerSecond { get; init; }
     public int MaximumAttempts { get; init; }
     public int Concurrency { get; init; }
@@ -33,7 +34,7 @@ internal sealed class BuilderOptions
         for (var index = 0; index < args.Length; index++)
         {
             var argument = args[index];
-            if (argument is "--refresh" or "--all-active" or "--discover-ids")
+            if (argument is "--refresh" or "--all-active" or "--discover-ids" or "--auction-items-only")
             {
                 switches.Add(argument);
                 continue;
@@ -81,6 +82,7 @@ internal sealed class BuilderOptions
             Locale = locale,
             Catalogs = catalogs.Values.ToArray(),
             Refresh = switches.Contains("--refresh"),
+            AuctionItemsOnly = switches.Contains("--auction-items-only"),
             RequestsPerSecond = Integer(values, "--requests-per-second", 12, 1, 50),
             MaximumAttempts = Integer(values, "--max-attempts", 6, 1, 20),
             Concurrency = Integer(values, "--concurrency", 8, 1, 64)

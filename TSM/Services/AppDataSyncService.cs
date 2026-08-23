@@ -8,7 +8,9 @@ public sealed class AppDataSyncService(
     AppDataCatalogParser parser,
     AppDataFileWriter writer,
     AccountingService accountingService,
-    AddonUpdateService? addonUpdater = null)
+    AddonUpdateService? addonUpdater = null,
+    TsmDataUploadService? dataUploader = null,
+    Func<bool>? uploadsEnabled = null)
 {
     public async Task<DataSyncResult> SyncAsync(
         IReadOnlyList<WowInstallation> installations,
@@ -114,8 +116,21 @@ public sealed class AppDataSyncService(
             }
         }
 
+        var uploaded = 0;
+        if (dataUploader is not null && (uploadsEnabled?.Invoke() ?? true))
+        {
+            try
+            {
+                uploaded = await dataUploader.UploadAsync(accounts, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                errors.Add($"TSM data upload failed: {exception.Message}");
+            }
+        }
+
         return new DataSyncResult(downloaded, writtenFiles, errors,
-            status.AddonMessage.Id, status.AddonMessage.Message, status.AppVersion, updatedAddons);
+            status.AddonMessage.Id, status.AddonMessage.Message, status.AppVersion, updatedAddons, uploaded);
     }
 
     private HashSet<string> FindLocalRealms(IEnumerable<TsmAccount> accounts, ICollection<string> errors)

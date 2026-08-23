@@ -218,6 +218,14 @@
                 <TextBlock Grid.Column="1" Text="Addons" VerticalAlignment="Center" FontWeight="Medium" />
               </Grid>
             </ToggleButton>
+            <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
+                          IsChecked="{Binding IsLogsSelected, Mode=OneWay}"
+                          Command="{Binding ShowLogsCommand}">
+              <Grid ColumnDefinitions="28,*" ColumnSpacing="9">
+                <lucide:LucideIcon Kind="FileText" Size="19" StrokeWidth="1.8" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="Logs" VerticalAlignment="Center" FontWeight="Medium" />
+              </Grid>
+            </ToggleButton>
           </StackPanel>
 
           <StackPanel Grid.Row="2" Spacing="8">
@@ -779,6 +787,54 @@
             </Border>
           </Grid>
 
+          <Grid IsVisible="{Binding IsLogsSelected}" RowDefinitions="Auto,*,Auto">
+            <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,0,0,1" Padding="16,9">
+              <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+                  <lucide:LucideIcon Kind="Activity" Size="16" StrokeWidth="1.8" Foreground="#F0A028" />
+                  <StackPanel Spacing="1">
+                    <TextBlock Text="Activity log" FontWeight="SemiBold" />
+                    <TextBlock Text="Synchronization events and application errors"
+                               Classes="muted" FontSize="9" />
+                  </StackPanel>
+                </StackPanel>
+                <Button Grid.Column="1" Content="Refresh" Command="{Binding RefreshLogsCommand}" />
+                <Button Grid.Column="2" Content="Save copy…" Click="SaveLogsClick" />
+                <Button Grid.Column="3" Classes="primary" Content="Upload sync log"
+                        Command="{Binding UploadLogCommand}" />
+              </Grid>
+            </Border>
+            <Border Grid.Row="1" Background="#121212">
+              <Grid>
+                <ScrollViewer Padding="18,15"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              Focusable="False"
+                              IsVisible="{Binding HasLogEntries}">
+                  <SelectableTextBlock Text="{Binding LogText}" TextWrapping="NoWrap"
+                                       FontFamily="Consolas, Menlo, monospace" FontSize="11"
+                                       LineHeight="18" Foreground="#CED1D3"
+                                       HorizontalAlignment="Left" VerticalAlignment="Top" />
+                </ScrollViewer>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
+                            IsVisible="{Binding !HasLogEntries}">
+                  <lucide:LucideIcon Kind="FileText" Size="28" StrokeWidth="1.5" Foreground="#64686C" />
+                  <TextBlock Text="No log entries yet" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                  <TextBlock Text="Synchronization activity and application errors will appear here."
+                             Classes="muted" FontSize="10" HorizontalAlignment="Center" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Grid.Row="2" Background="#191919" BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0" Padding="16,8">
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <Border Width="6" Height="6" CornerRadius="3" Background="#69C58F" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding LogStatus}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+              </StackPanel>
+            </Border>
+          </Grid>
+
           <Grid IsVisible="{Binding IsAccountingSelected}">
             <Grid RowDefinitions="Auto,*">
               <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
@@ -1056,6 +1112,52 @@
                 </ScrollViewer>
               </TabItem>
 
+              <TabItem Header="Backups" Classes="settings-tab">
+                <Grid RowDefinitions="Auto,*,Auto" Margin="20" RowSpacing="14">
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Addon backups" Classes="section-title" />
+                      <TextBlock Text="Local backups are available to everyone. Premium accounts also synchronize backups through TradeSkillMaster."
+                                 Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Create now" Command="{Binding CreateBackupCommand}" />
+                    <Button Grid.Column="2" Content="Refresh" Command="{Binding RefreshBackupsCommand}" />
+                  </Grid>
+                  <Border Grid.Row="1" Classes="subtle-card" Padding="0" ClipToBounds="True">
+                    <Grid RowDefinitions="34,*">
+                      <Border Background="#202020" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"
+                              Padding="12,0">
+                        <Grid ColumnDefinitions="1.4*,1.1*,1.1*,1.1*" ColumnSpacing="12">
+                          <TextBlock Text="ACCOUNT" Classes="field-label" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1" Text="CREATED" Classes="field-label" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="2" Text="LOCATION" Classes="field-label" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="3" Text="SYSTEM" Classes="field-label" VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+                      <ListBox Grid.Row="1" ItemsSource="{Binding Backups}" SelectedItem="{Binding SelectedBackup}">
+                        <ListBox.ItemTemplate>
+                          <DataTemplate>
+                            <Grid ColumnDefinitions="1.4*,1.1*,1.1*,1.1*" ColumnSpacing="12" MinHeight="36" Margin="8,0">
+                              <TextBlock Text="{Binding Account}" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="1" Text="{Binding CreatedText}" Classes="muted" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="2" Text="{Binding Location}" VerticalAlignment="Center" />
+                              <TextBlock Grid.Column="3" Text="{Binding SystemText}" Classes="muted" VerticalAlignment="Center"
+                                         TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                          </DataTemplate>
+                        </ListBox.ItemTemplate>
+                      </ListBox>
+                    </Grid>
+                  </Border>
+                  <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Text="{Binding BackupStatus}" Classes="muted" FontSize="10" TextWrapping="Wrap"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="primary" Content="Restore selected…"
+                            Click="RestoreBackupClick" />
+                  </Grid>
+                </Grid>
+              </TabItem>
+
               <TabItem Header="Advanced" Classes="settings-tab">
                 <ScrollViewer Padding="20">
                   <StackPanel Spacing="18">
@@ -1065,12 +1167,13 @@
                     </StackPanel>
                     <CheckBox Content="Load and cache Wowhead item details and artwork"
                               IsChecked="{Binding LoadOnlineItemIcons}" />
+                    <CheckBox Content="Upload addon data to TradeSkillMaster"
+                              IsChecked="{Binding Settings.UploadAddonData}" />
                     <Border Background="#211C15" BorderBrush="#624921" BorderThickness="1" CornerRadius="3" Padding="14,12">
                       <TextBlock Foreground="#F4CF87" FontSize="10" TextWrapping="Wrap"
-                                 Text="The legacy session exchange and signed sync requests use plain HTTP. The password request uses HTTPS. Enable this only on a trusted network." />
+                                 Text="Warning: TradeSkillMaster does not provide a working secure legacy upload API. Addon uploads and the authenticated session token are sent over plain HTTP. HTTPS certificate validation is disabled only for TradeSkillMaster-owned hosts for compatibility. Turn uploads off on untrusted networks." />
                     </Border>
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                      <Button Content="Upload app log" IsEnabled="False" />
                       <Button Content="Log out" Command="{Binding LogoutCommand}" />
                     </StackPanel>
                     <Border Height="1" Background="{StaticResource BorderBrush}" />

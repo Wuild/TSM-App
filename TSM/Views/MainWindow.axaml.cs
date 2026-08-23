@@ -5,6 +5,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.Diagnostics;
+using System.Text;
 using TSM.ViewModels;
 using TSM.Models;
 using TSM.Services;
@@ -310,6 +311,33 @@ public sealed partial class MainWindow : Window
             viewModel.SetWowPath(folders[0].Path.LocalPath);
     }
 
+    private async void SaveLogsClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel)
+            return;
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save TSM Desktop logs",
+            SuggestedFileName = $"tsm-desktop-{DateTime.Now:yyyyMMdd-HHmmss}.log",
+            DefaultExtension = "log",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("Log file")
+                {
+                    Patterns = ["*.log"],
+                    MimeTypes = ["text/plain"]
+                }
+            ]
+        });
+        if (file is null)
+            return;
+        await using var stream = await file.OpenWriteAsync();
+        if (stream.CanSeek)
+            stream.SetLength(0);
+        await using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+        await writer.WriteAsync(viewModel.GetLogExportText());
+    }
+
     private async void ResetApplicationClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not MainWindowViewModel viewModel)
@@ -344,6 +372,15 @@ public sealed partial class MainWindow : Window
             uri.Scheme is not ("https" or "http"))
             return;
         Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+    }
+
+    private async void RestoreBackupClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel { SelectedBackup: { } backup } viewModel)
+            return;
+        if (await NativeConfirmationService.ConfirmRestoreAsync(this, backup.Account) != true)
+            return;
+        await viewModel.RestoreSelectedBackupAsync();
     }
 
     private void OpenThirdPartyNoticesClick(object? sender, RoutedEventArgs e)
