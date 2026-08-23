@@ -27,6 +27,7 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("detects newly installed clients and local accounts", Run(DetectLocalInstallationChanges)),
     ("safely updates, reinstalls, and removes addons", UpdateInstalledAddon),
     ("runs automatic sync callbacks serially on a 30 minute cadence", AutomaticSyncCadence),
+    ("keeps database freshness independent from optional upload warnings", Run(ClassifySyncFreshness)),
     ("selects the native GitHub update package", SelectNativeUpdatePackage),
     ("decodes and indexes local AuctionDB prices", Run(IndexAuctionHouseSnapshot)),
     ("persists favorite item price history without duplicate snapshots", Run(PersistAuctionPriceHistory)),
@@ -60,6 +61,16 @@ static Func<Task> Run(Action action) => () =>
     action();
     return Task.CompletedTask;
 };
+
+static void ClassifySyncFreshness()
+{
+    var uploadWarning = "TSM data upload failed: 401 Unauthorized";
+    var refreshed = new DataSyncResult(0, 1, [uploadWarning], DataErrors: []);
+    var failed = new DataSyncResult(0, 0, ["Retail: could not write AppData.lua"],
+        DataErrors: ["Retail: could not write AppData.lua"]);
+    Assert(refreshed.DataSyncSucceeded, "optional upload warning marked realm data stale");
+    Assert(!failed.DataSyncSucceeded, "AppHelper write failure was marked as a successful data sync");
+}
 
 static void ParseSavedVariables()
 {

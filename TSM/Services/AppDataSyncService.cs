@@ -20,6 +20,12 @@ public sealed class AppDataSyncService(
     {
         var status = await apiClient.GetStatusAsync(channel, cancellationToken);
         var errors = new List<string>();
+        var dataErrors = new List<string>();
+        void AddDataError(string message)
+        {
+            errors.Add(message);
+            dataErrors.Add(message);
+        }
         IReadOnlyList<string> updatedAddons = [];
         try
         {
@@ -53,13 +59,14 @@ public sealed class AppDataSyncService(
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
-                errors.Add($"{installation.Name}: could not read AppData.lua ({exception.Message})");
+                AddDataError($"{installation.Name}: could not read AppData.lua ({exception.Message})");
                 continue;
             }
 
             var localRealms = mapping.FilterToLocalRealms
                 ? FindLocalRealms(accounts.Where(account =>
-                    string.Equals(account.GameVersion, installation.Name, StringComparison.OrdinalIgnoreCase)), errors)
+                    string.Equals(account.GameVersion, installation.Name, StringComparison.OrdinalIgnoreCase)),
+                    errors, dataErrors)
                 : null;
             var realmEntries = localRealms is null
                 ? mapping.Realms
@@ -100,7 +107,7 @@ public sealed class AppDataSyncService(
                     catch (Exception exception) when (exception is not OperationCanceledException)
                     {
                         downloadCache.TryRemove(dataString.Url, out _);
-                        errors.Add($"{installation.Name} · {entry.Name} · {type}: {exception.Message}");
+                        AddDataError($"{installation.Name} · {entry.Name} · {type}: {exception.Message}");
                     }
                 }
             }
@@ -112,7 +119,7 @@ public sealed class AppDataSyncService(
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                errors.Add($"{installation.Name}: could not write AppData.lua ({exception.Message})");
+                AddDataError($"{installation.Name}: could not write AppData.lua ({exception.Message})");
             }
         }
 
@@ -130,10 +137,12 @@ public sealed class AppDataSyncService(
         }
 
         return new DataSyncResult(downloaded, writtenFiles, errors,
-            status.AddonMessage.Id, status.AddonMessage.Message, status.AppVersion, updatedAddons, uploaded);
+            status.AddonMessage.Id, status.AddonMessage.Message, status.AppVersion, updatedAddons, uploaded,
+            dataErrors);
     }
 
-    private HashSet<string> FindLocalRealms(IEnumerable<TsmAccount> accounts, ICollection<string> errors)
+    private HashSet<string> FindLocalRealms(IEnumerable<TsmAccount> accounts, ICollection<string> errors,
+        ICollection<string> dataErrors)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var account in accounts)
@@ -144,7 +153,9 @@ public sealed class AppDataSyncService(
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException)
             {
-                errors.Add($"{account.DisplayName}: could not identify local realms ({exception.Message})");
+                var message = $"{account.DisplayName}: could not identify local realms ({exception.Message})";
+                errors.Add(message);
+                dataErrors.Add(message);
             }
         }
         return result;

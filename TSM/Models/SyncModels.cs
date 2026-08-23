@@ -99,7 +99,11 @@ public sealed record DataSyncResult(
     string NewsMessage = "",
     int LatestAppVersion = 0,
     IReadOnlyList<string>? UpdatedAddons = null,
-    int UploadedDataSets = 0);
+    int UploadedDataSets = 0,
+    IReadOnlyList<string>? DataErrors = null)
+{
+    public bool DataSyncSucceeded => (DataErrors ?? Errors).Count == 0;
+}
 
 public sealed record TsmUploadRequest(
     string Endpoint,

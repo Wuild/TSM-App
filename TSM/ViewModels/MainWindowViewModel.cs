@@ -1699,7 +1699,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             }
             RefreshLocalData();
             ShowSyncNotifications(result);
-            if (result.Errors.Count == 0)
+            if (result.DataSyncSucceeded)
             {
                 Settings.LastSuccessfulSyncUtc = DateTimeOffset.UtcNow;
                 NotifySyncFreshnessChanged();
