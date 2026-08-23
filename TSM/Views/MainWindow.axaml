@@ -1267,10 +1267,6 @@
                                   IsChecked="{Binding Settings.HardwareAcceleration}" />
                         <TextBlock Classes="muted" FontSize="10" Margin="24,0,0,0" TextWrapping="Wrap"
                                    Text="Uses the GPU for smoother scrolling and charts. Turn this off to troubleshoot graphics issues or reduce GPU memory. Restart required." />
-                        <CheckBox Content="Prefer native Wayland when available"
-                                  IsChecked="{Binding Settings.PreferNativeWayland}" />
-                        <TextBlock Classes="muted" FontSize="10" Margin="24,0,0,0" TextWrapping="Wrap"
-                                   Text="Linux only. Uses native Wayland when available, with an app-integrated title bar when the compositor does not provide one. Restart required." />
                         <TextBlock Classes="muted" FontSize="10" Margin="24,2,0,0"
                                    Text="{Binding RenderingBackend, StringFormat='Current renderer: {0}'}" />
                       </StackPanel>

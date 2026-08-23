@@ -349,6 +349,8 @@ public sealed partial class MainWindow : Window
 
     private void HideToTray()
     {
+        if (Application.Current is App app)
+            app.EnsureTrayVisible();
         ShowInTaskbar = false;
         Hide();
     }

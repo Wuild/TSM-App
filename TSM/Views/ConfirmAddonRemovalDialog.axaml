@@ -6,7 +6,6 @@
         Width="460" Height="210"
         CanResize="False" ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner"
-        WindowDecorationsTheme="{StaticResource TsmWindowDecorations}"
         Background="{StaticResource AppBackgroundBrush}">
   <Grid RowDefinitions="*,Auto" Margin="18">
     <Grid ColumnDefinitions="Auto,*" ColumnSpacing="14">

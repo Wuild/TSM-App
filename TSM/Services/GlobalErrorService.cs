@@ -36,6 +36,11 @@ public static class GlobalErrorService
         RotateLog();
         Dispatcher.UIThread.UnhandledException += (_, args) =>
         {
+            if (IsExpectedTrayCancellation(args.Exception))
+            {
+                args.Handled = true;
+                return;
+            }
             var fatal = IsFatal(args.Exception);
             args.Handled = !fatal;
             Report(args.Exception, "User interface", fatal);
@@ -126,8 +131,13 @@ public static class GlobalErrorService
             {
                 var dialog = new ErrorDialog(report);
                 var owner = _windowProvider?.Invoke();
+                if (owner is MainWindow mainWindow && !mainWindow.IsVisible)
+                    mainWindow.RestoreFromTray();
                 if (owner is not null && owner.IsVisible)
+                {
+                    owner.Activate();
                     await dialog.ShowDialog(owner);
+                }
                 else
                     await ShowWithoutOwnerAsync(dialog);
             }
@@ -193,4 +203,9 @@ public static class GlobalErrorService
 
     private static bool IsFatal(Exception exception) =>
         exception is OutOfMemoryException or StackOverflowException or AccessViolationException;
+
+    private static bool IsExpectedTrayCancellation(Exception exception) =>
+        (exception is TaskCanceledException or OperationCanceledException) &&
+        exception.StackTrace?.Contains("Avalonia.FreeDesktop.DBusTrayIconImpl.WatchAsync",
+            StringComparison.Ordinal) == true;
 }

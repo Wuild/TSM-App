@@ -37,28 +37,7 @@ internal static class Program
         var builder = AppBuilder.Configure<App>()
             .WithInterFont()
             .LogToTrace();
-        if (CanUseNativeWayland(settings))
-        {
-            RenderingBackend = "Native Wayland · EGL hardware acceleration";
-            return builder.UseWayland().UseSkia().UseHarfBuzz();
-        }
         return ConfigureRendering(builder.UsePlatformDetect(), settings.HardwareAcceleration);
-    }
-
-    private static bool CanUseNativeWayland(Models.AppSettings settings)
-    {
-        if (!OperatingSystem.IsLinux() || !settings.HardwareAcceleration || !settings.PreferNativeWayland)
-            return false;
-        if (!string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland",
-                StringComparison.OrdinalIgnoreCase))
-            return false;
-        var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
-        if (string.IsNullOrWhiteSpace(display))
-            return false;
-        if (Path.IsPathRooted(display))
-            return File.Exists(display);
-        var runtimeDirectory = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
-        return !string.IsNullOrWhiteSpace(runtimeDirectory) && File.Exists(Path.Combine(runtimeDirectory, display));
     }
 
     private static AppBuilder ConfigureRendering(AppBuilder builder, bool hardwareAcceleration)

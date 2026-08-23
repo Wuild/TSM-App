@@ -86,4 +86,6 @@ public sealed partial class App : Application
         if (icons is { Count: > 0 })
             icons[0].IsVisible = isVisible;
     }
+
+    internal void EnsureTrayVisible() => SetTrayVisible(true);
 }

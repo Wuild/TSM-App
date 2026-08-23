@@ -25,7 +25,7 @@ cp "$script_dir/com.wuild.TSMDesktop.desktop" "$app_dir/com.wuild.TSMDesktop.des
 cp "$script_dir/com.wuild.TSMDesktop.desktop" \
   "$app_dir/usr/share/applications/com.wuild.TSMDesktop.desktop"
 cp "$script_dir/com.wuild.TSMDesktop.metainfo.xml" \
-  "$app_dir/usr/share/metainfo/com.wuild.TSMDesktop.metainfo.xml"
+  "$app_dir/usr/share/metainfo/com.wuild.TSMDesktop.appdata.xml"
 cp "$project_dir/TSM/Assets/tsm-app.png" "$app_dir/com.wuild.TSMDesktop.png"
 cp "$project_dir/TSM/Assets/tsm-app.png" \
   "$app_dir/usr/share/icons/hicolor/512x512/apps/com.wuild.TSMDesktop.png"
@@ -38,7 +38,7 @@ if command -v desktop-file-validate >/dev/null 2>&1; then
 fi
 if command -v appstreamcli >/dev/null 2>&1; then
   appstreamcli validate --no-net \
-    "$app_dir/usr/share/metainfo/com.wuild.TSMDesktop.metainfo.xml"
+    "$app_dir/usr/share/metainfo/com.wuild.TSMDesktop.appdata.xml"
 fi
 test -s "$app_dir/com.wuild.TSMDesktop.png"
 test -L "$app_dir/.DirIcon"

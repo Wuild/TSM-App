@@ -97,7 +97,6 @@ static void ResetApplicationSettings()
         RunAtStartup = true,
         MinimizeToTray = false,
         HardwareAcceleration = false,
-        PreferNativeWayland = false,
         HasCompletedOnboarding = true,
         WindowWidth = 1777,
         WindowHeight = 999,
@@ -115,7 +114,6 @@ static void ResetApplicationSettings()
     Assert(settings.Email == defaults.Email && settings.WowPath == defaults.WowPath &&
            settings.RunAtStartup == defaults.RunAtStartup && settings.MinimizeToTray == defaults.MinimizeToTray &&
            settings.HardwareAcceleration == defaults.HardwareAcceleration &&
-           settings.PreferNativeWayland == defaults.PreferNativeWayland &&
            settings.HasCompletedOnboarding == defaults.HasCompletedOnboarding &&
            settings.WindowWidth == defaults.WindowWidth && settings.WindowHeight == defaults.WindowHeight &&
            settings.WindowMaximized == defaults.WindowMaximized && settings.AuctionFavorites.Count == 0 &&
@@ -247,7 +245,6 @@ static void PersistManagedRealms()
             RunAtStartup = true,
             MinimizeToTray = false,
             HardwareAcceleration = false,
-            PreferNativeWayland = false,
             AuctionSortColumn = "MinBuyout",
             AuctionSortDescending = true,
             AuctionFavorites = [new AuctionFavorite("Retail", "i:19019")],
@@ -273,7 +270,6 @@ static void PersistManagedRealms()
         Assert(loaded.HasCompletedOnboarding && loaded.RunAtStartup && !loaded.MinimizeToTray,
             "onboarding desktop preferences did not survive settings reload");
         Assert(!loaded.HardwareAcceleration, "rendering preference did not survive settings reload");
-        Assert(!loaded.PreferNativeWayland, "Wayland preference did not survive settings reload");
         Assert(loaded.AuctionSortColumn == "MinBuyout" && loaded.AuctionSortDescending,
             "auction sorting preference did not survive settings reload");
         Assert(loaded.AuctionFavorites.Single() == settings.AuctionFavorites.Single(),

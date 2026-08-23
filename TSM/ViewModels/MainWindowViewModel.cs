@@ -428,8 +428,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         get => _isCheckingForUpdates;
         private set
         {
-            if (SetProperty(ref _isCheckingForUpdates, value))
-                CheckForUpdatesCommand.RaiseCanExecuteChanged();
+            if (!SetProperty(ref _isCheckingForUpdates, value))
+                return;
+            CheckForUpdatesCommand.RaiseCanExecuteChanged();
+            InstallUpdateCommand.RaiseCanExecuteChanged();
         }
     }
     public string UpdateStatus { get => _updateStatus; private set => SetProperty(ref _updateStatus, value); }

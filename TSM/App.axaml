@@ -1,8 +1,5 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:chrome="using:Avalonia.Controls.Chrome"
-             xmlns:lucide="using:Lucide.Avalonia"
-             xmlns:templates="using:Avalonia.Markup.Xaml.Templates"
              x:Class="TSM.App"
              Name="com.wuild.TSMDesktop"
              RequestedThemeVariant="Dark">
@@ -41,70 +38,6 @@
     <SolidColorBrush x:Key="MutedTextBrush" Color="{StaticResource MutedTextColor}" />
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessColor}" />
     <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerColor}" />
-
-    <ControlTheme x:Key="TsmWindowDecorations" TargetType="chrome:WindowDrawnDecorations">
-      <Setter Property="DefaultTitleBarHeight" Value="34" />
-      <Setter Property="DefaultFrameThickness" Value="7" />
-      <Setter Property="DefaultShadowThickness" Value="0" />
-      <Setter Property="Template">
-        <templates:WindowDrawnDecorationsTemplate>
-          <chrome:WindowDrawnDecorationsContent>
-            <chrome:WindowDrawnDecorationsContent.Underlay>
-              <Border Margin="{TemplateBinding ShadowThickness}"
-                      Background="{StaticResource AppBackgroundBrush}"
-                      BorderBrush="#343434" BorderThickness="1"
-                      IsHitTestVisible="False" />
-            </chrome:WindowDrawnDecorationsContent.Underlay>
-            <chrome:WindowDrawnDecorationsContent.Overlay>
-              <Grid>
-                <Grid Height="{TemplateBinding TitleBarHeight}"
-                      Margin="{TemplateBinding ShadowThickness}"
-                      VerticalAlignment="Top" ColumnDefinitions="Auto,*,Auto"
-                      Background="#171717">
-                  <Border Background="#171717"
-                          chrome:WindowDecorationProperties.ElementRole="TitleBar">
-                    <StackPanel Orientation="Horizontal" Margin="14,0" Spacing="8"
-                                VerticalAlignment="Center">
-                      <Image Width="16" Height="16" Source="/Assets/tsm-app.png" />
-                      <TextBlock Text="{TemplateBinding Title}" Foreground="#D8D8D7"
-                                 FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Border>
-                  <Grid Grid.Column="1" Background="Transparent"
-                        chrome:WindowDecorationProperties.ElementRole="TitleBar" />
-                  <StackPanel Grid.Column="2" Orientation="Horizontal"
-                              chrome:WindowDecorationProperties.ElementRole="DecorationsElement">
-                    <Button x:Name="PART_MinimizeButton" Classes="drawn-caption"
-                            chrome:WindowDecorationProperties.ElementRole="MinimizeButton">
-                      <lucide:LucideIcon Kind="Minus" Size="15" StrokeWidth="1.8" />
-                    </Button>
-                    <Button x:Name="PART_MaximizeButton" Classes="drawn-caption"
-                            chrome:WindowDecorationProperties.ElementRole="MaximizeButton">
-                      <Grid>
-                        <lucide:LucideIcon Classes="maximize-glyph" Kind="Square" Size="13" StrokeWidth="1.8" />
-                        <lucide:LucideIcon Classes="restore-glyph" Kind="Copy" Size="13" StrokeWidth="1.8" IsVisible="False" />
-                      </Grid>
-                    </Button>
-                    <Button x:Name="PART_CloseButton" Classes="drawn-caption close"
-                            chrome:WindowDecorationProperties.ElementRole="CloseButton">
-                      <lucide:LucideIcon Kind="X" Size="16" StrokeWidth="1.8" />
-                    </Button>
-                  </StackPanel>
-                  <Border Grid.ColumnSpan="3" Height="1" VerticalAlignment="Bottom"
-                          Background="{StaticResource BorderBrush}" IsHitTestVisible="False" />
-                </Grid>
-              </Grid>
-            </chrome:WindowDrawnDecorationsContent.Overlay>
-          </chrome:WindowDrawnDecorationsContent>
-        </templates:WindowDrawnDecorationsTemplate>
-      </Setter>
-      <Style Selector="^:maximized /template/ Control.maximize-glyph">
-        <Setter Property="IsVisible" Value="False" />
-      </Style>
-      <Style Selector="^:maximized /template/ Control.restore-glyph">
-        <Setter Property="IsVisible" Value="True" />
-      </Style>
-    </ControlTheme>
   </Application.Resources>
 
   <Application.Styles>
@@ -115,11 +48,6 @@
     </FluentTheme>
     <Style Selector="Window">
       <Setter Property="Background" Value="{StaticResource AppBackgroundBrush}" />
-      <Setter Property="WindowDecorations" Value="Full" />
-      <Setter Property="ExtendClientAreaToDecorationsHint" Value="True" />
-      <Setter Property="ExtendClientAreaTitleBarHeightHint" Value="34" />
-      <Setter Property="Padding" Value="0,34,0,0" />
-      <Setter Property="WindowDecorationsTheme" Value="{StaticResource TsmWindowDecorations}" />
     </Style>
     <Style Selector="Button">
       <Setter Property="MinHeight" Value="32" />
@@ -160,26 +88,6 @@
     <Style Selector="Button.ghost">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    </Style>
-    <Style Selector="Button.drawn-caption">
-      <Setter Property="Width" Value="42" />
-      <Setter Property="Height" Value="34" />
-      <Setter Property="MinHeight" Value="34" />
-      <Setter Property="Padding" Value="0" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Background" Value="#171717" />
-      <Setter Property="Foreground" Value="#B8B8B7" />
-      <Setter Property="FontSize" Value="15" />
-      <Setter Property="HorizontalContentAlignment" Value="Center" />
-      <Setter Property="VerticalContentAlignment" Value="Center" />
-    </Style>
-    <Style Selector="Button.drawn-caption:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#292929" />
-      <Setter Property="Foreground" Value="#F0F0EF" />
-    </Style>
-    <Style Selector="Button.drawn-caption.close:pointerover /template/ ContentPresenter">
-      <Setter Property="Background" Value="#8E3029" />
     </Style>
     <Style Selector="TextBlock.title">
       <Setter Property="FontSize" Value="18" />
