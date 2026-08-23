@@ -54,7 +54,7 @@ public sealed class StartupRegistrationService
             $"Exec={string.Join(' ', command)}\n" +
             "Terminal=false\n" +
             "Hidden=false\n" +
-            "StartupWMClass=TSM\n" +
+            "StartupWMClass=com.wuild.TSMDesktop\n" +
             "X-GNOME-Autostart-enabled=true\n" +
             "X-GNOME-Autostart-Delay=3\n");
         if (File.Exists(legacyPath))

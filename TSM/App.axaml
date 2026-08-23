@@ -4,6 +4,7 @@
              xmlns:lucide="using:Lucide.Avalonia"
              xmlns:templates="using:Avalonia.Markup.Xaml.Templates"
              x:Class="TSM.App"
+             Name="com.wuild.TSMDesktop"
              RequestedThemeVariant="Dark">
   <TrayIcon.Icons>
     <TrayIcons>
