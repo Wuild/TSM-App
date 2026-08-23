@@ -6,6 +6,7 @@ namespace TSM;
 
 internal static class Program
 {
+    private const string LinuxWindowClass = "com.wuild.TSMDesktop";
     internal static SingleInstanceCoordinator? SingleInstance { get; private set; }
     internal static string RenderingBackend { get; private set; } = "Automatic";
 
@@ -47,7 +48,9 @@ internal static class Program
             RenderingBackend = OperatingSystem.IsLinux()
                 ? "X11 · hardware acceleration with software fallback"
                 : "Native · hardware acceleration with software fallback";
-            return builder;
+            return OperatingSystem.IsLinux()
+                ? builder.With(new X11PlatformOptions { WmClass = LinuxWindowClass })
+                : builder;
         }
         if (OperatingSystem.IsWindows())
         {
@@ -61,6 +64,7 @@ internal static class Program
                 { RenderingMode = [AvaloniaNativeRenderingMode.Software] });
         }
         RenderingBackend = "X11 · software rendering";
-        return builder.With(new X11PlatformOptions { RenderingMode = [X11RenderingMode.Software] });
+        return builder.With(new X11PlatformOptions
+            { RenderingMode = [X11RenderingMode.Software], WmClass = LinuxWindowClass });
     }
 }
