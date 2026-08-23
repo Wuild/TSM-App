@@ -115,6 +115,8 @@
     <Style Selector="Button">
       <Setter Property="MinHeight" Value="32" />
       <Setter Property="Padding" Value="12,5" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="CornerRadius" Value="3" />
       <Setter Property="Background" Value="#242424" />
       <Setter Property="Foreground" Value="#E8E8E8" />
@@ -191,24 +193,79 @@
       <Setter Property="MinHeight" Value="36" />
       <Setter Property="Background" Value="{StaticResource PanelRaisedBrush}" />
       <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="3" />
       <Setter Property="Padding" Value="10,0" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="TextBox:pointerover">
+      <Setter Property="Background" Value="#292826" />
+      <Setter Property="BorderBrush" Value="#494744" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#292826" />
+      <Setter Property="BorderBrush" Value="#494744" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
     <Style Selector="TextBox:focus-visible">
-      <Setter Property="BorderBrush" Value="#F2B84B" />
-      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Background" Value="#2B2925" />
+      <Setter Property="BorderBrush" Value="#756247" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="#2B2925" />
+      <Setter Property="BorderBrush" Value="#756247" />
+      <Setter Property="BorderThickness" Value="1" />
     </Style>
     <Style Selector="ComboBox">
       <Setter Property="MinHeight" Value="34" />
       <Setter Property="Background" Value="{StaticResource PanelRaisedBrush}" />
       <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="3" />
       <Setter Property="Padding" Value="8,5" />
     </Style>
+    <Style Selector="ComboBox:pointerover">
+      <Setter Property="Background" Value="#292826" />
+      <Setter Property="BorderBrush" Value="#494744" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ComboBox:pointerover /template/ Border#Background">
+      <Setter Property="Background" Value="#292826" />
+      <Setter Property="BorderBrush" Value="#494744" />
+    </Style>
+    <Style Selector="ComboBox:pressed /template/ Border#Background">
+      <Setter Property="Background" Value="#2D2A26" />
+      <Setter Property="BorderBrush" Value="#5A5146" />
+    </Style>
+    <Style Selector="ComboBox:dropdownopen">
+      <Setter Property="Background" Value="#2D2A26" />
+      <Setter Property="BorderBrush" Value="#756247" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
     <Style Selector="ComboBox:focus-visible">
-      <Setter Property="BorderBrush" Value="#F2B84B" />
-      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Background" Value="#2B2925" />
+      <Setter Property="BorderBrush" Value="#756247" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ComboBox:focus-visible /template/ Border#HighlightBackground">
+      <Setter Property="Background" Value="#2B2925" />
+      <Setter Property="BorderBrush" Value="#756247" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="ComboBoxItem">
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Background" Value="#202020" />
+    </Style>
+    <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2B2925" />
+      <Setter Property="Foreground" Value="#F0F0EF" />
+    </Style>
+    <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="#3A2B18" />
+      <Setter Property="Foreground" Value="#D2B588" />
     </Style>
     <Style Selector="TabItem">
       <Setter Property="Padding" Value="13,8" />

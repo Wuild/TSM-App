@@ -835,7 +835,7 @@
             </Border>
           </Grid>
 
-          <Grid IsVisible="{Binding IsAccountingSelected}">
+          <Grid IsVisible="{Binding IsAccountingSelected}" SizeChanged="AccountingWorkspaceSizeChanged">
             <Grid RowDefinitions="Auto,*">
               <Border Background="#191919" BorderBrush="{StaticResource BorderBrush}"
                       BorderThickness="0,0,0,1" Padding="16,10">
@@ -949,10 +949,15 @@
                           <TextBlock Grid.Column="3" Text="PROFIT" Classes="field-label" VerticalAlignment="Center" />
                         </Grid>
                       </Border>
-                      <ItemsControl Grid.Row="1" ItemsSource="{Binding AccountingTopItems}">
-                        <ItemsControl.ItemTemplate>
+                      <ListBox Grid.Row="1" Classes="auction-list"
+                               ItemsSource="{Binding AccountingTopItems}"
+                               SelectedItem="{Binding SelectedAccountingItem}"
+                               SelectionMode="Single"
+                               ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
                           <DataTemplate>
-                            <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="18,9">
+                            <Border MinHeight="54" Padding="18,9" Cursor="Hand"
+                                    BorderBrush="#303030" BorderThickness="0,0,0,1">
                               <Grid ColumnDefinitions="2*,1*,1*,1*">
                                 <Grid ColumnDefinitions="38,*" ColumnSpacing="9">
                                   <Border Width="36" Height="36" CornerRadius="6"
@@ -977,14 +982,240 @@
                               </Grid>
                             </Border>
                           </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
+                        </ListBox.ItemTemplate>
+                      </ListBox>
                     </Grid>
                   </Border>
 
                 </StackPanel>
               </ScrollViewer>
             </Grid>
+            <Border x:Name="AccountingItemDrawer" Width="390" HorizontalAlignment="Right"
+                    VerticalAlignment="Top" Margin="0,12,30,0"
+                    Background="#121212" BorderBrush="#414141" BorderThickness="1" CornerRadius="4"
+                    BoxShadow="0 10 30 0 #90000000" ZIndex="20" ClipToBounds="True"
+                    IsVisible="{Binding IsAuctionItemDrawerOpen}">
+              <Grid RowDefinitions="Auto,Auto,*">
+                <Border Background="#191919" BorderBrush="#353535" BorderThickness="0,0,0,1"
+                        Padding="14,12" CornerRadius="4,4,0,0">
+                  <Grid ColumnDefinitions="52,*,Auto,Auto" ColumnSpacing="8">
+                    <Border Width="48" Height="48" CornerRadius="7"
+                            Background="{Binding AuctionItemDrawerItem.QualityColor}" Padding="2">
+                      <Border Width="44" Height="44" CornerRadius="5" Background="#0D0D0D" ClipToBounds="True">
+                        <Image Width="44" Height="44" Source="{Binding AuctionItemDrawerItem.Icon}"
+                               Stretch="UniformToFill">
+                          <Image.Clip>
+                            <RectangleGeometry Rect="0,0,44,44" RadiusX="5" RadiusY="5" />
+                          </Image.Clip>
+                        </Image>
+                      </Border>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.ItemName}"
+                                 Foreground="{Binding AuctionItemDrawerItem.QualityColor}"
+                                 FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.ItemString}" Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <Button Grid.Column="2" Classes="icon" Width="30" Height="30" MinHeight="30"
+                            Tag="{Binding AuctionItemDrawerItem}" Click="ToggleAuctionFavorite"
+                            ToolTip.Tip="{Binding AuctionItemDrawerItem.FavoriteToolTip}">
+                      <lucide:LucideIcon Kind="Star" Size="16" StrokeWidth="1.9"
+                                         Foreground="{Binding AuctionItemDrawerItem.FavoriteColor}" />
+                    </Button>
+                    <Button Grid.Column="3" Classes="icon" Width="30" Height="30" MinHeight="30"
+                            Command="{Binding CloseAuctionItemDrawerCommand}" ToolTip.Tip="Close item details">
+                      <lucide:LucideIcon Kind="X" Size="16" StrokeWidth="1.8" />
+                    </Button>
+                  </Grid>
+                </Border>
+                <Border Grid.Row="1" Padding="14,9" Background="#161616"
+                        BorderBrush="#353535" BorderThickness="0,0,0,1"
+                        IsVisible="{Binding AuctionItemDrawerItem.IsItemInfoLoading}">
+                  <Grid RowDefinitions="Auto,Auto" RowSpacing="7">
+                    <TextBlock Text="{Binding AuctionItemDrawerItem.ItemInfoLoadingStatus}"
+                               Classes="muted" FontSize="9" />
+                    <ProgressBar Grid.Row="1" Height="3" IsIndeterminate="True" />
+                  </Grid>
+                </Border>
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                  <StackPanel Spacing="14" Margin="16,14,16,18">
+                    <TextBlock Text="ITEM DETAILS" Classes="field-label" />
+                    <ItemsControl ItemsSource="{Binding AuctionItemDrawerItem.ItemDetails}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7" Margin="0,1">
+                            <Grid Width="14" Height="14" VerticalAlignment="Center"
+                                  IsVisible="{Binding HasSocket}">
+                              <Ellipse Fill="#111111" Stroke="{Binding SocketColor}" StrokeThickness="2" />
+                              <Ellipse Width="6" Height="6" Fill="{Binding SocketColor}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Grid>
+                            <TextBlock Grid.Column="1" Text="{Binding Text}" Foreground="{Binding Color}"
+                                       TextWrapping="Wrap" FontSize="11" LineHeight="17"
+                                       IsVisible="{Binding IsText}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"
+                                        IsVisible="{Binding IsMoney}">
+                              <TextBlock Text="{Binding Text}" Foreground="#E4E4E4" FontSize="11" />
+                              <TextBlock FontSize="11">
+                                <Run Text="{Binding Money.Gold}" Foreground="#FFD100" />
+                                <Run Text="{Binding Money.Silver}" Foreground="#C7CED6" />
+                                <Run Text="{Binding Money.Copper}" Foreground="#C77C43" />
+                              </TextBlock>
+                            </StackPanel>
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Button Command="{Binding OpenAuctionItemInWowheadCommand}"
+                            HorizontalAlignment="Left" Margin="0,3,0,0">
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <Image Source="/Assets/wowhead-logo.png" Width="18" Height="18" />
+                        <TextBlock Text="Open in Wowhead" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                    <Border Height="1" Background="#353535" />
+                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                      <StackPanel Spacing="5">
+                        <TextBlock Text="MIN BUYOUT" Classes="field-label" />
+                        <TextBlock FontWeight="SemiBold">
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Empty}" Foreground="#737A81" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Gold}" Foreground="#FFD100" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Silver}" Foreground="#C7CED6" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MinBuyoutParts.Copper}" Foreground="#C77C43" />
+                        </TextBlock>
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="5">
+                        <TextBlock Text="RECENT" Classes="field-label" />
+                        <TextBlock>
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Empty}" Foreground="#737A81" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Gold}" Foreground="#FFD100" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Silver}" Foreground="#C7CED6" />
+                          <Run Text="{Binding AuctionItemDrawerItem.MarketValueParts.Copper}" Foreground="#C77C43" />
+                        </TextBlock>
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" Spacing="5">
+                        <TextBlock Text="AUCTIONS" Classes="field-label" />
+                        <TextBlock Text="{Binding AuctionItemDrawerItem.AuctionsDisplay}" />
+                      </StackPanel>
+                    </Grid>
+                    <Border Height="1" Background="#353535" />
+                    <StackPanel Spacing="8">
+                      <TextBlock Text="REGIONAL MARKET ACTIVITY" Classes="field-label" />
+                      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                        <StackPanel Spacing="5">
+                          <TextBlock Text="SOLD / DAY" Classes="field-label" FontSize="9" />
+                          <TextBlock Text="{Binding AuctionItemDrawerItem.RegionSoldPerDayDisplay}"
+                                     FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="5">
+                          <TextBlock Text="SALE RATE" Classes="field-label" FontSize="9" />
+                          <TextBlock Text="{Binding AuctionItemDrawerItem.RegionSaleRateDisplay}"
+                                     FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="5">
+                          <TextBlock Text="SALE AVG" Classes="field-label" FontSize="9" />
+                          <TextBlock FontSize="11">
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Empty}" Foreground="#737A81" />
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Gold}" Foreground="#FFD100" />
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Silver}" Foreground="#C7CED6" />
+                            <Run Text="{Binding AuctionItemDrawerItem.RegionSaleAverageParts.Copper}" Foreground="#C77C43" />
+                          </TextBlock>
+                        </StackPanel>
+                      </Grid>
+                    </StackPanel>
+                    <Border Height="1" Background="#353535" />
+                    <StackPanel Spacing="9">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                        <TextBlock Text="PRICE HISTORY" Classes="field-label" />
+                        <TextBlock Grid.Column="1" Text="{Binding AuctionItemDrawerItem.PriceHistoryRange}"
+                                   Classes="muted" FontSize="9" />
+                      </Grid>
+                      <Border Height="104" Background="#0E0E0E" BorderBrush="#303030" BorderThickness="1"
+                              CornerRadius="3" Padding="7" IsVisible="{Binding AuctionItemDrawerItem.HasPriceChart}">
+                        <controls:PriceHistoryChart Points="{Binding AuctionItemDrawerItem.PriceHistory}" />
+                      </Border>
+                      <Grid ColumnDefinitions="*,*" ColumnSpacing="12"
+                            IsVisible="{Binding AuctionItemDrawerItem.HasPriceChart}">
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="LOW" Classes="field-label" FontSize="9" />
+                          <TextBlock FontSize="11">
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Empty}" Foreground="#737A81" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Gold}" Foreground="#FFD100" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Silver}" Foreground="#C7CED6" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryLowParts.Copper}" Foreground="#C77C43" />
+                          </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="3">
+                          <TextBlock Text="HIGH" Classes="field-label" FontSize="9" />
+                          <TextBlock FontSize="11">
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Empty}" Foreground="#737A81" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Gold}" Foreground="#FFD100" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Silver}" Foreground="#C7CED6" />
+                            <Run Text="{Binding AuctionItemDrawerItem.PriceHistoryHighParts.Copper}" Foreground="#C77C43" />
+                          </TextBlock>
+                        </StackPanel>
+                      </Grid>
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.PriceHistoryStatus}"
+                                 Classes="muted" FontSize="9" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border Height="1" Background="#353535" />
+                    <StackPanel Spacing="9">
+                      <TextBlock Text="LOCAL AUCTIONDB PRICE SNAPSHOTS" Classes="field-label" />
+                      <ItemsControl ItemsSource="{Binding AuctionItemDrawerItem.PriceSnapshots}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate>
+                            <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="0,9,0,11">
+                              <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Faction}" Foreground="{Binding FactionColor}"
+                                           FontSize="11" FontWeight="SemiBold" />
+                                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
+                                      ColumnSpacing="12" RowSpacing="8">
+                                  <StackPanel Spacing="3">
+                                    <TextBlock Text="MIN BUYOUT" Classes="field-label" FontSize="9" />
+                                    <TextBlock FontSize="11" FontWeight="SemiBold">
+                                      <Run Text="{Binding MinBuyout.Empty}" Foreground="#737A81" />
+                                      <Run Text="{Binding MinBuyout.Gold}" Foreground="#FFD100" />
+                                      <Run Text="{Binding MinBuyout.Silver}" Foreground="#C7CED6" />
+                                      <Run Text="{Binding MinBuyout.Copper}" Foreground="#C77C43" />
+                                    </TextBlock>
+                                  </StackPanel>
+                                  <StackPanel Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="RECENT" Classes="field-label" FontSize="9" />
+                                    <TextBlock FontSize="11">
+                                      <Run Text="{Binding Recent.Empty}" Foreground="#737A81" />
+                                      <Run Text="{Binding Recent.Gold}" Foreground="#FFD100" />
+                                      <Run Text="{Binding Recent.Silver}" Foreground="#C7CED6" />
+                                      <Run Text="{Binding Recent.Copper}" Foreground="#C77C43" />
+                                    </TextBlock>
+                                  </StackPanel>
+                                  <StackPanel Grid.Row="1" Spacing="3">
+                                    <TextBlock Text="HISTORICAL" Classes="field-label" FontSize="9" />
+                                    <TextBlock FontSize="11">
+                                      <Run Text="{Binding Historical.Empty}" Foreground="#737A81" />
+                                      <Run Text="{Binding Historical.Gold}" Foreground="#FFD100" />
+                                      <Run Text="{Binding Historical.Silver}" Foreground="#C7CED6" />
+                                      <Run Text="{Binding Historical.Copper}" Foreground="#C77C43" />
+                                    </TextBlock>
+                                  </StackPanel>
+                                  <StackPanel Grid.Row="1" Grid.Column="1" Spacing="3">
+                                    <TextBlock Text="AUCTIONS" Classes="field-label" FontSize="9" />
+                                    <TextBlock Text="{Binding AuctionsDisplay}" FontSize="11" />
+                                  </StackPanel>
+                                </Grid>
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <TextBlock Text="{Binding AuctionItemDrawerItem.AdditionalSnapshotsText}"
+                                 Classes="muted" FontSize="10"
+                                 IsVisible="{Binding AuctionItemDrawerItem.AdditionalSnapshotsText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                  </StackPanel>
+                </ScrollViewer>
+              </Grid>
+            </Border>
           </Grid>
         </Grid>
 

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -42,7 +41,8 @@ public sealed partial class ItemIconService : IDisposable
     private readonly ItemDatabaseService _itemDatabase;
     private readonly TimeSpan _tooltipRetryDelay;
     private readonly TimeSpan _iconRetryDelay;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _cacheLocks = new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim[] _cacheLocks = Enumerable.Range(0, 64)
+        .Select(_ => new SemaphoreSlim(1, 1)).ToArray();
     private readonly Lazy<IReadOnlyDictionary<string, Dictionary<string, string>>> _bundledIconSlugs;
     private long _tooltipResumeUtcTicks;
     private long _iconResumeUtcTicks;
@@ -76,7 +76,7 @@ public sealed partial class ItemIconService : IDisposable
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
         var cacheKey = $"tooltip:{flavorKey}:{itemId}";
-        var cacheLock = _cacheLocks.GetOrAdd(cacheKey, _ => new SemaphoreSlim(1, 1));
+        var cacheLock = CacheLock(cacheKey);
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
@@ -96,15 +96,16 @@ public sealed partial class ItemIconService : IDisposable
             return null;
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
-        var cacheLock = _cacheLocks.GetOrAdd($"icon:{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
+        var cacheLock = CacheLock($"icon:{flavorKey}:{itemId}");
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
             var summary = _itemDatabase.GetSummary(itemString, flavor);
-            var icon = _bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons) &&
-                       flavorIcons.TryGetValue(itemId, out var bundledIcon)
-                ? bundledIcon
-                : summary?.IconSlug;
+            var icon = summary?.IconSlug;
+            if (string.IsNullOrWhiteSpace(icon) &&
+                _bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons) &&
+                flavorIcons.TryGetValue(itemId, out var bundledIcon))
+                icon = bundledIcon;
             IconMetadata? metadata = null;
             if (string.IsNullOrWhiteSpace(icon))
             {
@@ -138,8 +139,9 @@ public sealed partial class ItemIconService : IDisposable
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
         string? icon = _itemDatabase.GetSummary(itemString, flavor)?.IconSlug;
-        if (_bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons))
-            icon ??= flavorIcons.GetValueOrDefault(itemId);
+        if (string.IsNullOrWhiteSpace(icon) &&
+            _bundledIconSlugs.Value.TryGetValue(flavorKey, out var flavorIcons))
+            icon = flavorIcons.GetValueOrDefault(itemId);
         if (string.IsNullOrWhiteSpace(icon))
         {
             var metadataPath = Path.Combine(_paths.ItemIconDirectory, flavorKey, $"{itemId}.json");
@@ -166,7 +168,7 @@ public sealed partial class ItemIconService : IDisposable
             return null;
         var itemId = match.Groups["id"].Value;
         var flavorKey = ResolveFlavorKey(flavor);
-        var cacheLock = _cacheLocks.GetOrAdd($"icon:{flavorKey}:{itemId}", _ => new SemaphoreSlim(1, 1));
+        var cacheLock = CacheLock($"icon:{flavorKey}:{itemId}");
         await cacheLock.WaitAsync(cancellationToken);
         try
         {
@@ -184,21 +186,22 @@ public sealed partial class ItemIconService : IDisposable
 
     public async Task ClearCacheAsync(CancellationToken cancellationToken = default)
     {
-        var locks = _cacheLocks.Values.Distinct().ToArray();
-        foreach (var cacheLock in locks)
+        foreach (var cacheLock in _cacheLocks)
             await cacheLock.WaitAsync(cancellationToken);
         try
         {
             if (Directory.Exists(_paths.ItemIconDirectory))
                 Directory.Delete(_paths.ItemIconDirectory, true);
-            _cacheLocks.Clear();
         }
         finally
         {
-            foreach (var cacheLock in locks)
+            foreach (var cacheLock in _cacheLocks)
                 cacheLock.Release();
         }
     }
+
+    private SemaphoreSlim CacheLock(string key) =>
+        _cacheLocks[(int)((uint)StringComparer.Ordinal.GetHashCode(key) % _cacheLocks.Length)];
 
     private async Task<ItemIconResult?> GetCoreAsync(string itemId, string flavorKey,
         CancellationToken cancellationToken)

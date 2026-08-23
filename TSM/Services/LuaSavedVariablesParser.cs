@@ -30,11 +30,14 @@ public sealed class LuaSavedVariablesParser
         lock (_gate)
         {
             if (_fileCache.TryGetValue(fullPath, out var cached) &&
-                cached.LastWriteTicks == info.LastWriteTimeUtc.Ticks && cached.Length == info.Length)
-                return cached.Document;
+                cached.LastWriteTicks == info.LastWriteTimeUtc.Ticks && cached.Length == info.Length &&
+                cached.Document.TryGetTarget(out var cachedDocument))
+                return cachedDocument;
 
             var document = ParseCore(File.ReadAllText(fullPath, Encoding.UTF8));
-            _fileCache[fullPath] = new CachedDocument(info.LastWriteTimeUtc.Ticks, info.Length, document);
+            _fileCache[fullPath] = new CachedDocument(info.LastWriteTimeUtc.Ticks, info.Length,
+                new WeakReference<LuaDocument>(document));
+            RemoveExpiredCacheEntries();
             return document;
         }
     }
@@ -42,18 +45,35 @@ public sealed class LuaSavedVariablesParser
     private LuaDocument ParseCore(string source)
     {
         _lexer = new Lexer(source);
-        _current = _lexer.Next();
-        var globals = new Dictionary<string, object?>(StringComparer.Ordinal);
-
-        while (_current.Kind != TokenKind.End)
+        try
         {
-            var name = Expect(TokenKind.Identifier, "Expected a global variable name").Text;
-            Expect(TokenKind.Equals, "Expected '=' after the variable name");
-            globals[name] = ParseValue(0);
-            ConsumeSeparators();
-        }
+            _current = _lexer.Next();
+            var globals = new Dictionary<string, object?>(StringComparer.Ordinal);
 
-        return new LuaDocument(globals);
+            while (_current.Kind != TokenKind.End)
+            {
+                var name = Expect(TokenKind.Identifier, "Expected a global variable name").Text;
+                Expect(TokenKind.Equals, "Expected '=' after the variable name");
+                globals[name] = ParseValue(0);
+                ConsumeSeparators();
+            }
+
+            return new LuaDocument(globals);
+        }
+        finally
+        {
+            _lexer = null!;
+            _current = default;
+        }
+    }
+
+    private void RemoveExpiredCacheEntries()
+    {
+        foreach (var (path, cached) in _fileCache)
+        {
+            if (!cached.Document.TryGetTarget(out _))
+                _fileCache.Remove(path);
+        }
     }
 
     private object? ParseValue(int depth)
@@ -193,7 +213,7 @@ public sealed class LuaSavedVariablesParser
     }
 
     private readonly record struct Token(TokenKind Kind, string Text, int Line, int Column);
-    private sealed record CachedDocument(long LastWriteTicks, long Length, LuaDocument Document);
+    private sealed record CachedDocument(long LastWriteTicks, long Length, WeakReference<LuaDocument> Document);
 
     private sealed class Lexer(string source)
     {

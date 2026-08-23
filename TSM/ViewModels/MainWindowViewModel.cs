@@ -79,6 +79,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private CancellationTokenSource? _accountingIconCancellation;
     private Task? _accountingIconRunner;
     private IReadOnlyList<AccountingItemViewModel> _accountingTopItems = [];
+    private AccountingItemViewModel? _selectedAccountingItem;
     private readonly SemaphoreSlim _accountingIconSlots = new(3, 3);
     private bool _suppressAccountingRefresh;
     private bool _accountingStatisticsDirty = true;
@@ -311,6 +312,16 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     {
         get => _accountingTopItems;
         private set => SetProperty(ref _accountingTopItems, value);
+    }
+    public AccountingItemViewModel? SelectedAccountingItem
+    {
+        get => _selectedAccountingItem;
+        set
+        {
+            if (!SetProperty(ref _selectedAccountingItem, value) || value is null)
+                return;
+            OpenAccountingItem(value);
+        }
     }
     public IReadOnlyList<AccountingPeriodOption> AccountingPeriods { get; } =
     [
@@ -1516,6 +1527,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             return;
         if (IsSettingsOpen)
             SaveSettings();
+        if (SelectedTab != index)
+        {
+            SelectedAuctionItem = null;
+            SelectedAccountingItem = null;
+        }
         IsSettingsOpen = false;
         SelectedTab = index;
     }
@@ -2093,6 +2109,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void ReplaceAccountingTopItems(IReadOnlyList<AccountingItemSummary> items, string flavor)
     {
         StopAccountingIconLoading(false);
+        SelectedAccountingItem = null;
         foreach (var item in AccountingTopItems)
             item.Dispose();
         AccountingTopItems = items.Select(item => new AccountingItemViewModel(item, flavor)).ToArray();
@@ -2743,6 +2760,20 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         UpdateAuctionResultSummary();
     }
 
+    public void OpenAccountingItem(AccountingItemViewModel item)
+    {
+        var key = ClassificationKey(item.Flavor, item.ItemString);
+        var variants = _auctionIndex.Where(row =>
+            string.Equals(ClassificationKey(row.Flavor, row.BaseItemString), key,
+                StringComparison.OrdinalIgnoreCase)).ToArray();
+        var summary = variants.Length > 0
+            ? AggregateAuctionRows(variants)
+            : new AuctionHouseItemRow(item.ItemString, item.ItemName, string.Empty, item.Flavor,
+                null, null, null, null, DateTimeOffset.MinValue);
+        SelectedAuctionItem = new AuctionHouseItemViewModel(summary, variants.Length > 0 ? variants : [summary],
+            _auctionFavoriteKeys.Contains(key), _auctionPriceHistory.Get(item.Flavor, item.ItemString));
+    }
+
     private void ReplaceVisibleAuctionResults(int count)
     {
         SelectedAuctionItem = null;
@@ -2836,6 +2867,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void CloseAuctionItemDrawer()
     {
         SelectedAuctionItem = null;
+        SelectedAccountingItem = null;
     }
 
     private void StartAuctionIconLoad(AuctionHouseItemViewModel item)
@@ -2861,11 +2893,12 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private void StartAuctionTooltipLoad(AuctionHouseItemViewModel item)
     {
-        if (!LoadOnlineItemIcons || _auctionIconCancellation is null ||
-            item.HasItemDetails && item.Icon is not null)
+        if (!LoadOnlineItemIcons || item.HasItemDetails && item.Icon is not null)
             return;
         CancelActiveTooltipLoad();
-        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_auctionIconCancellation.Token);
+        var cancellation = _auctionIconCancellation is null
+            ? new CancellationTokenSource()
+            : CancellationTokenSource.CreateLinkedTokenSource(_auctionIconCancellation.Token);
         _activeTooltipCancellation = cancellation;
         _activeTooltipItem = item;
         item.SetItemInfoLoading(true, $"Loading {item.ItemName} item details…");

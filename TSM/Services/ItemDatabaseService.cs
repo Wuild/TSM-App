@@ -10,12 +10,16 @@ namespace TSM.Services;
 public sealed class ItemDatabaseService
 {
     private const int MaximumPreviewBytes = 1_000_000;
+    private const int DetailCacheLimit = 96;
+    private const int SummaryCacheLimit = 2048;
     private readonly string _databasePath;
     private readonly string _connectionString;
     private readonly ConcurrentDictionary<string, Lazy<BundledItemData?>> _cache =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Lazy<BundledItemSummary?>> _summaryCache =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentQueue<string> _detailCacheOrder = new();
+    private readonly ConcurrentQueue<string> _summaryCacheOrder = new();
 
     public ItemDatabaseService(string? databasePath = null)
     {
@@ -36,8 +40,12 @@ public sealed class ItemDatabaseService
         if (!TryItemId(itemString, out var itemId))
             return null;
         var databaseFlavor = ResolveFlavor(flavor);
-        return _cache.GetOrAdd($"{databaseFlavor}:{itemId}", _ =>
-            new Lazy<BundledItemData?>(() => Read(databaseFlavor, itemId))).Value;
+        var key = $"{databaseFlavor}:{itemId}";
+        var created = new Lazy<BundledItemData?>(() => Read(databaseFlavor, itemId));
+        var value = _cache.GetOrAdd(key, created);
+        if (ReferenceEquals(value, created))
+            TrackCacheEntry(_cache, _detailCacheOrder, key, DetailCacheLimit);
+        return value.Value;
     }
 
     public BundledItemSummary? GetSummary(string itemString, string flavor)
@@ -45,8 +53,20 @@ public sealed class ItemDatabaseService
         if (!TryItemId(itemString, out var itemId))
             return null;
         var databaseFlavor = ResolveFlavor(flavor);
-        return _summaryCache.GetOrAdd($"{databaseFlavor}:{itemId}", _ =>
-            new Lazy<BundledItemSummary?>(() => ReadSummary(databaseFlavor, itemId))).Value;
+        var key = $"{databaseFlavor}:{itemId}";
+        var created = new Lazy<BundledItemSummary?>(() => ReadSummary(databaseFlavor, itemId));
+        var value = _summaryCache.GetOrAdd(key, created);
+        if (ReferenceEquals(value, created))
+            TrackCacheEntry(_summaryCache, _summaryCacheOrder, key, SummaryCacheLimit);
+        return value.Value;
+    }
+
+    private static void TrackCacheEntry<T>(ConcurrentDictionary<string, Lazy<T>> cache,
+        ConcurrentQueue<string> order, string key, int limit)
+    {
+        order.Enqueue(key);
+        while (cache.Count > limit && order.TryDequeue(out var oldest))
+            cache.TryRemove(oldest, out _);
     }
 
     public IReadOnlyList<BundledItemData> Query(ItemDatabaseQuery query)

@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
@@ -29,6 +30,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         _placementSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _placementSaveTimer.Tick += SavePlacementTimerTick;
+        AddHandler(KeyDownEvent, CloseItemDrawerOnEscape, RoutingStrategies.Tunnel);
         AuctionList.AddHandler(ScrollViewer.ScrollChangedEvent, AuctionListScrolled, RoutingStrategies.Bubble);
         Opened += ApplyDeferredWindowPlacement;
         Opened += InitializeViewModel;
@@ -37,6 +39,15 @@ public sealed partial class MainWindow : Window
         PropertyChanged += HandleWindowPropertyChanged;
         SizeChanged += CaptureNormalWindowSize;
         PositionChanged += (_, _) => CaptureNormalWindowPosition();
+    }
+
+    private void CloseItemDrawerOnEscape(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape ||
+            DataContext is not MainWindowViewModel { IsAuctionItemDrawerOpen: true } viewModel)
+            return;
+        viewModel.CloseAuctionItemDrawerCommand.Execute(null);
+        e.Handled = true;
     }
 
     public void RestoreSavedWindowPlacement(AppSettings settings)
@@ -188,6 +199,12 @@ public sealed partial class MainWindow : Window
         if (workspaceHeight <= 0)
             return;
         AuctionItemDrawer.MaxHeight = Math.Max(1, workspaceHeight - 24);
+    }
+
+    private void AccountingWorkspaceSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (e.NewSize.Height > 0)
+            AccountingItemDrawer.MaxHeight = Math.Max(1, e.NewSize.Height - 24);
     }
 
     private async void DisposeViewModel(object? sender, EventArgs e)
