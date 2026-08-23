@@ -2,38 +2,4 @@
 APPDIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 export LD_LIBRARY_PATH="$APPDIR/usr/lib:$APPDIR/usr/bin${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
-desktop_dir="$data_dir/applications"
-icon_dir="$data_dir/icons/hicolor/512x512/apps"
-desktop_id="com.wuild.TSMDesktop.desktop"
-if [ -n "${APPIMAGE:-}" ]; then
-  mkdir -p "$desktop_dir" "$icon_dir"
-  cp "$APPDIR/com.wuild.TSMDesktop.png" "$icon_dir/com.wuild.TSMDesktop.png"
-  desktop_exec=$(printf '%s' "$APPIMAGE" | sed 's/\\/\\\\/g; s/"/\\"/g; s/%/%%/g')
-  desktop_tmp="$desktop_dir/$desktop_id.tmp"
-  while IFS= read -r desktop_line; do
-    case "$desktop_line" in
-      Exec=*) printf 'Exec="%s"\n' "$desktop_exec" ;;
-      *) printf '%s\n' "$desktop_line" ;;
-    esac
-  done < "$APPDIR/$desktop_id" > "$desktop_tmp"
-  mv "$desktop_tmp" "$desktop_dir/$desktop_id"
-  for desktop_file in "$desktop_dir"/*.desktop; do
-    [ -f "$desktop_file" ] || continue
-    [ "$desktop_file" = "$desktop_dir/$desktop_id" ] && continue
-    grep -Eq '^Name=(TSM Desktop|TradeSkillMaster|TradeSkillMaster Cross-Platform)( \([^)]*\))?$' \
-      "$desktop_file" || continue
-    case "$(basename "$desktop_file")" in
-      appimagekit_*) rm -f -- "$desktop_file" ;;
-      *) grep -Eq '^Exec=.*TSM-[^ ]*\.AppImage' "$desktop_file" && rm -f -- "$desktop_file" ;;
-    esac
-  done
-  if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database "$desktop_dir" >/dev/null 2>&1 || true
-  fi
-  if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-    gtk-update-icon-cache --force --ignore-theme-index "$data_dir/icons/hicolor" >/dev/null 2>&1 || true
-  fi
-fi
-
 exec "$APPDIR/usr/bin/TSM" "$@"
