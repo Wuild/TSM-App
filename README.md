@@ -1,56 +1,82 @@
-# TSM Desktop for Linux, Windows, and macOS
+# TSM Desktop
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-orange.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/Wuild/TSM-App?label=download)](https://github.com/Wuild/TSM-App/releases/latest)
 
-**TSM Desktop is an unofficial TradeSkillMaster companion with first-class Linux support.** It provides a self-contained x86_64 AppImage for World of Warcraft players looking for a native TSM desktop app on Linux, alongside Windows and Apple Silicon macOS packages.
+An unofficial TradeSkillMaster companion for Linux, Windows, and macOS.
 
-The app discovers local World of Warcraft clients, keeps TradeSkillMaster AppHelper realm data synchronized, manages addon updates, visualizes and exports Accounting data, and provides an in-app Auction House browser using local TSM data.
+TSM Desktop keeps your TradeSkillMaster data and addons up to date, lets you browse local Auction House data, and turns your Accounting history into useful charts and summaries. It is built especially for players who want a native TSM desktop experience on Linux, while also providing packages for Windows and Apple Silicon Macs.
+
+[Download the latest release](https://github.com/Wuild/TSM-App/releases/latest) · [Report a problem](https://github.com/Wuild/TSM-App/issues) · [Build from source](#build-from-source)
 
 > [!IMPORTANT]
-> TSM Desktop is an independent, unofficial personal project. It is not affiliated with, authorized by, sponsored by, endorsed by, or supported by TradeSkillMaster LLC, Blizzard Entertainment, Wowhead, ZAM Network, or their affiliates. See the full [project notice](NOTICE.md).
+> TSM Desktop is an independent, unofficial project. It is not affiliated with, authorized by, sponsored by, endorsed by, or supported by TradeSkillMaster LLC, Blizzard Entertainment, Wowhead, ZAM Network, or their affiliates. See the full [project notice](NOTICE.md).
 
-The application supports:
+## What you can do
 
-- Windows x64
-- macOS Apple Silicon (Arm64)
-- Linux x64 through AppImage
+- Keep AppHelper realm data synchronized in the background.
+- Update, reinstall, or remove TSM addons for each detected WoW client.
+- Search and filter local Auction House data across your realms.
+- Favorite items and collect local price history over time.
+- Explore gold, sales, purchases, profit, and top items from TSM Accounting.
+- Back up your TSM SavedVariables and restore them safely.
+- Receive app updates without installing the .NET runtime separately.
 
-Windows ARM, Linux ARM, and macOS Intel packages are not produced.
+## A quick look
 
-## Download
+### Browse the Auction House
 
-Download the installer for your system from [GitHub Releases](https://github.com/Wuild/TSM-App/releases/latest). Installers are self-contained, so the .NET runtime does not need to be installed separately. ZIP files attached to releases are portable update packages and are not the recommended installation method.
+Search by item name or ID, compare market values, filter by realm and faction, and pin favorites for quick access.
 
-### TradeSkillMaster desktop app for Linux
+![Auction House browser showing item prices and market statistics](auctions.png)
 
-Linux is a primary supported platform for this project. The x86_64 AppImage works across major desktop distributions without requiring the .NET runtime or a distribution-specific package. It includes the application icon, desktop metadata, automatic update support, system-tray integration, Linux Secret Service credential storage, and automatic detection of supported World of Warcraft installations.
+### Understand your Accounting data
 
-Use the AppImage if you are searching for an unofficial TSM app on Ubuntu, Linux Mint, Fedora, Arch Linux, Manjaro, openSUSE, Debian, or another x86_64 Linux desktop distribution. Distribution-specific packages and ARM builds are not currently provided.
+Choose an account, realm, player, and time range to see gold history, sales, purchases, profit, and top-performing items.
+
+![Accounting dashboard showing player gold and transaction statistics](accounting.png)
+
+### Keep realm data current
+
+See which realms and WoW clients were detected, whether AuctionDB data is available, and when each realm was last updated.
+
+![Realm data page showing a synchronized realm](realms.png)
+
+### Configure it your way
+
+Choose your WoW directory, release channel, startup behavior, notifications, backups, update preferences, and privacy options.
+
+![General settings page](settings.png)
+
+## Supported systems
+
+| System | Package | Supported hardware |
+| --- | --- | --- |
+| Windows | Setup executable | x86_64 |
+| macOS | DMG | Apple Silicon (Arm64) |
+| Linux | AppImage | x86_64 |
+
+Windows ARM, Intel Macs, and Linux ARM are not currently supported.
 
 ## Install
+
+Download the package for your system from [GitHub Releases](https://github.com/Wuild/TSM-App/releases/latest). Release installers are self-contained; you do not need to install .NET. ZIP attachments are portable update packages and are not recommended for a normal installation.
 
 ### Windows
 
 1. Download `TSM-<version>-windows-x86_64-setup.exe`.
-2. Run the installer and review the destination and optional desktop shortcut.
-3. Launch **TSM Desktop** from the Start menu or the installer completion page.
-4. If Windows displays a security prompt, verify that the installer came from this repository before allowing it to run.
+2. Run the installer.
+3. Open **TSM Desktop** from the Start menu.
 
-The installer performs a per-user installation under `%LOCALAPPDATA%\Programs\TSM Desktop`, does not require administrator access, and registers a normal Windows uninstaller.
+The app installs for your user under `%LOCALAPPDATA%\Programs\TSM Desktop`, does not require administrator access, and appears in Windows' normal list of installed apps.
 
 ### macOS
 
-Download `TSM-<version>-macos-arm64.dmg`. The macOS package requires an Apple Silicon Mac; Intel Macs are not supported.
+1. Download `TSM-<version>-macos-arm64.dmg`.
+2. Open the DMG and drag `TradeSkillMaster.app` to **Applications**.
+3. Eject the disk image and launch the app from Applications.
 
-Then:
-
-1. Open the downloaded DMG.
-2. Drag `TradeSkillMaster.app` onto the **Applications** shortcut in the disk image.
-3. Eject the **TSM Desktop** disk image.
-4. Open the application from Applications.
-5. If Gatekeeper blocks the first launch, right-click the app and choose **Open**, or allow it from **System Settings → Privacy & Security** after verifying the download.
-
-Automatic updates need write access to the `.app` bundle.
+The package requires an Apple Silicon Mac. If Gatekeeper blocks the first launch, right-click the app and choose **Open**, or allow it under **System Settings → Privacy & Security** after confirming that it came from this repository.
 
 ### Linux
 
@@ -61,165 +87,125 @@ Automatic updates need write access to the `.app` bundle.
    chmod +x TSM-<version>-x86_64.AppImage
    ```
 
-3. Move it to a permanent writable location, for example `~/Applications`.
-4. Run it:
+3. Move it to a permanent, writable location such as `~/Applications` and run it:
 
    ```bash
    ./TSM-<version>-x86_64.AppImage
    ```
 
-The AppImage must remain writable for automatic installation of updates. If the distribution does not provide FUSE support, run it with `--appimage-extract-and-run` or install the AppImage-compatible FUSE package supplied by the distribution.
-
-Only one TSM Desktop process runs per operating-system user. Launching the app again restores and focuses the existing window, including when it is minimized or hidden in the system tray.
+The AppImage is designed for x86_64 desktop distributions such as Ubuntu, Debian, Linux Mint, Fedora, Arch Linux, Manjaro, and openSUSE. Keep it in a writable location so automatic updates can replace it. If your distribution does not provide FUSE support, install its AppImage-compatible FUSE package or launch with `--appimage-extract-and-run`.
 
 ## First-time setup
 
-1. Start TSM Desktop.
-2. Select the base World of Warcraft directory. Choose the folder containing client directories such as `_retail_`, `_classic_`, or `_anniversary_`, not an individual addon folder.
-3. Choose notification, startup, and tray preferences in onboarding.
-4. Sign in with a TradeSkillMaster account. Authentication is required before the main application opens.
-5. Make sure TradeSkillMaster and TradeSkillMaster AppHelper are installed in the desired WoW clients.
+1. Open TSM Desktop.
+2. Select your base **World of Warcraft** directory—the folder containing `_retail_`, `_classic_`, `_anniversary_`, or other client folders.
+3. Choose your notification, startup, and tray preferences.
+4. Sign in with your TradeSkillMaster account.
+5. Confirm that TradeSkillMaster and TradeSkillMaster AppHelper are installed for the WoW clients you use.
 
-Credentials can be remembered through Windows Credential Manager, macOS Keychain, or Linux Secret Service. Passwords are not written to `settings.json`.
+The app can find common WoW locations automatically. Saved credentials are stored in Windows Credential Manager, macOS Keychain, or Linux Secret Service; your password is never written to `settings.json`.
 
-## Use
+> [!TIP]
+> If the Auction House is empty, make sure AppHelper is installed, then synchronize the realm again from the **Realm data** page.
 
-### Realm data
+## How the main features work
 
-The start page lists locally detected and account-managed realms with their WoW flavor and installation state. Use the ellipsis menu on a realm to synchronize or remove it. While running, the app checks the configured WoW directory every 30 seconds for newly installed game flavors, accounts, addons, and changed local realm data. Detected changes refresh the UI and trigger an authenticated data sync. The regular authenticated refresh also runs every 30 minutes, and the top bar shows the freshness of the last successful sync.
+### Realm synchronization
 
-### Addons
+TSM Desktop watches your configured WoW directory for new clients, accounts, addons, and local realm-data changes. Local changes are checked every 30 seconds, while the regular authenticated refresh runs every 30 minutes. The top bar shows when the last successful sync completed.
 
-The Addons page shows each detected TradeSkillMaster addon separately for every installed WoW client. **Check for updates** compares installed versions with the selected TSM Release or Beta channel and installs newer packages. **Reinstall** replaces one selected addon with the current channel package. **Remove** deletes only that addon folder after confirmation; SavedVariables and other WoW account data are preserved.
+Use the realm's **…** menu to synchronize it manually or remove it from the managed list.
 
-### Auction House
+### Addon management
 
-The Auction House workspace reads local AppHelper AuctionDB snapshots. It supports:
+The **Addons** page lists every detected TSM addon separately for each installed WoW client.
 
-- item-name search
-- realm and faction filters
-- sortable price and market-statistic columns
-- flavor-aware offline item details backed by a bundled SQLite catalog
-- favorites pinned above other results
-- local price-history charts for favorited items
+- **Check for updates** compares installed versions with your selected Release or Beta channel.
+- **Reinstall** replaces one addon with the current channel version.
+- **Remove** deletes only the selected addon folder after confirmation.
 
-Favoriting an item begins collecting price snapshots from future realm synchronizations. Price history is local and is not retroactively available before tracking starts.
+Removing an addon does not delete its SavedVariables or other WoW account data.
 
-Releases include a read-only SQLite item catalog. Indexed columns provide item names, quality, class, subclass, equipment slot, level, sell price, and icon slugs without loading the database into memory. Structured Blizzard preview data is compressed per row and is only decompressed when an item drawer opens. Item images are still downloaded from Blizzard's media CDN as they enter the viewport and cached locally.
+### Auction House and favorites
 
-The current bundled catalog covers active Anniversary TBC items. Flavors not yet present in SQLite continue to use local TSM names and the existing Wowhead fallback until their Blizzard catalog has been built.
+The Auction House reads local AppHelper AuctionDB snapshots. You can search by item name, filter by realm and faction, sort market columns, open item details, and favorite items.
 
-If the Auction House is empty, verify that AppHelper is installed and synchronize the realm again. Online Wowhead enrichment can be disabled under **Settings → Advanced** without disabling local prices.
+Favoriting an item starts recording price snapshots during future realm synchronizations. Price history is stored locally and cannot be filled retroactively. Item details primarily come from a bundled, read-only SQLite catalog, while visible item images are downloaded from Blizzard's media CDN and cached locally. Online Wowhead enrichment can be disabled under **Settings → Advanced** without disabling local prices.
 
-### Accounting statistics
+The bundled catalog currently covers active Anniversary TBC items. Other game flavors continue to use local TSM names and the existing Wowhead fallback where needed.
 
-Open **Accounting**, then choose an account, realm, player, and time range. The app reads the local TradeSkillMaster SavedVariables file and shows recorded character gold, sales and purchases, profit, daily activity, and top items.
+### Accounting and backups
 
-By default, a signed-in sync mirrors the official desktop application's SavedVariables uploads to TradeSkillMaster: AuctionDB scans, Accounting auction events, Black Market data, groups and shopping prices, analytics, error reports, and the normalized TSM/AppHelper databases. Settings → Advanced → **Upload addon data to TradeSkillMaster** disables all of these uploads. TradeSkillMaster's legacy upload API is only available over plain HTTP, so both the upload and authenticated session token are unencrypted in transit. Use the upload option only on a trusted network. HTTPS certificate validation is bypassed only for TradeSkillMaster-owned hosts for compatibility with its legacy client; GitHub, Blizzard, Wowhead, and other connections retain normal certificate validation.
+The **Accounting** page reads your local `TradeSkillMaster.lua` SavedVariables file. Its charts and totals only cover data that the addon recorded. Auction earnings and spending exclude transfers, repair bills, and postage.
 
-The Backups settings tab creates compressed local copies of `TradeSkillMaster.lua` and `TradeSkillMaster_AppHelper.lua` at most once per hour when the files have changed. Local backups are retained for 30 days. Premium TSM accounts synchronize these archives with TSM when addon uploads are enabled and can restore backups created on another computer. A fresh local safety backup is always created before restoration, and WoW must be closed. Accounting CSV export is intentionally not included.
-
-The Logs workspace records synchronization starts, results, uploads, warnings, and failures alongside captured application errors. Both log sources can be viewed locally and saved through the platform file picker. Uploading sends only the synchronization log to TradeSkillMaster when addon uploads are enabled; application errors, stack traces, and system diagnostics remain local.
-
-The chart uses TSM's recorded per-character gold snapshots. Sales and purchase totals use TSM's local Accounting transaction history, so the page only contains periods captured by the addon. Money transfers, repair bills, and postage are excluded from auction earnings and spending.
-
-Select the data types at the bottom of the page to export CSV files. Files are written to the desktop when available, otherwise to the application data directory under `Exports`.
+Backups create compressed copies of `TradeSkillMaster.lua` and `TradeSkillMaster_AppHelper.lua` when they change, at most once per hour. Local backups are retained for 30 days. Premium TSM accounts can synchronize these archives when addon uploads are enabled. Before restoring, TSM Desktop creates a fresh safety backup; World of Warcraft must be closed.
 
 ### Updates
 
-Update behavior is configured under **Settings → Updates**.
+Under **Settings → Updates**, you can:
 
-- Automatic checks can be disabled.
-- The check interval is configurable.
-- **Check now** performs a manual check.
-- Automatic installation is a separate opt-in option.
-- Release mode ignores prereleases; Beta mode includes them.
+- enable or disable automatic checks;
+- choose the check interval;
+- check manually;
+- opt in to automatic installation; and
+- choose Release or Beta updates.
 
-Windows and macOS replace the published application through a rollback-capable helper. Linux replaces the running AppImage and restarts it. If the current installation cannot be updated automatically, the app opens the matching GitHub Release instead.
+Windows and macOS use a rollback-capable update helper. Linux replaces and restarts the running AppImage. If an installation cannot be updated automatically, TSM Desktop opens the matching GitHub Release instead.
 
-### Help and licenses
+## Privacy and network security
 
-Open **Settings → Help** for setup guidance, troubleshooting, documentation, releases, and issue-reporting links. **Settings → Licenses** lists the direct, transitive, build-time, and runtime projects used by the app, including versions, license families, upstream projects, and license links. The packaged `THIRD_PARTY_NOTICES.md` file contains the corresponding notices.
+By default, a signed-in sync mirrors the official desktop app's SavedVariables uploads to TradeSkillMaster. This can include AuctionDB scans, Accounting auction events, Black Market data, groups and shopping prices, analytics, error reports, and normalized TSM/AppHelper databases.
 
-## Reset the application
+You can disable all addon-data uploads under **Settings → Advanced → Upload addon data to TradeSkillMaster**.
 
-Open **Settings → Advanced → Reset app…** and confirm the reset. This action:
+> [!WARNING]
+> TradeSkillMaster's legacy upload and private session APIs include plain HTTP traffic. Upload data and authenticated session tokens may therefore be unencrypted in transit. Use account synchronization only on a trusted network. HTTPS certificate compatibility exceptions apply only to TradeSkillMaster-owned hosts; GitHub, Blizzard, Wowhead, and other connections retain normal certificate validation.
 
-- restores all preferences and window placement to defaults
-- clears cached Wowhead metadata and item icons
-- clears local Auction House price history
-- removes favorites and managed realm selections
-- removes the remembered login from the operating system credential store
-- disables launch-at-startup registration
-- returns the app to onboarding
+Access and session tokens remain in memory. Application errors, stack traces, and system diagnostics stay local; only the synchronization log can be uploaded when addon uploads are enabled.
 
-Reset does not modify the World of Warcraft installation, installed addons, addon configuration, or SavedVariables.
+## Troubleshooting
 
-## Uninstall
+### The app did not find World of Warcraft
 
-For the cleanest uninstall, use **Settings → Advanced → Reset app…** first. This removes the remembered credential and startup registration. Then quit the application from the tray menu before running the platform uninstall steps.
+Open **Settings → General** and select the base World of Warcraft folder, not an individual client or addon folder. It should contain directories such as `_retail_`, `_classic_`, or `_anniversary_`.
 
-### Windows
+### Auction House data is missing
 
-1. Open **Windows Settings → Apps → Installed apps**.
-2. Find **TSM Desktop**, open its menu, and choose **Uninstall**.
-3. Complete the uninstall wizard.
-4. Delete `%LOCALAPPDATA%\TSM-CrossPlatform` only if remaining settings and cached data should also be removed.
+Check that TradeSkillMaster AppHelper is installed for that WoW client, start WoW once if necessary so its files exist, and synchronize the realm again.
 
-### macOS
+### The app appears to open only once
 
-1. Quit TSM Desktop from its tray menu.
-2. Move `TradeSkillMaster.app` from Applications to Trash.
-3. Empty Trash when convenient.
-4. Delete `~/Library/Application Support/TSM-CrossPlatform` only if remaining settings and cached data should also be removed.
+This is expected. Only one TSM Desktop process runs per operating-system user. Launching it again restores and focuses the existing window, including when it is minimized to the system tray.
 
-### Linux
+### Where can I find logs?
 
-1. Delete the AppImage.
-2. Delete `~/.local/share/TSM-CrossPlatform`.
-3. If startup registration was not reset first, delete `~/.config/autostart/tradeskillmaster-crossplatform.desktop`.
+Open the **Logs** workspace to view synchronization activity, warnings, failures, and captured application errors. Logs can be saved through your system's file picker.
 
-If the app was removed before using Reset, remove any credential named for `TSM-CrossPlatform` from Windows Credential Manager, macOS Keychain Access, or the Linux password/keyring application. WoW addons and SavedVariables remain installed and must be removed separately through the addon manager or WoW directory if desired.
+More guidance and links are available under **Settings → Help**.
 
-## Application data
+## Reset or uninstall
 
-| Platform | Default location |
+Use **Settings → Advanced → Reset app…** to clear preferences, caches, favorites, local price history, managed realms, startup registration, and the remembered login. Resetting does **not** modify your WoW installation, addons, addon configuration, or SavedVariables.
+
+For the cleanest uninstall, reset the app first, quit it from the tray menu, and then:
+
+- **Windows:** uninstall **TSM Desktop** from **Settings → Apps → Installed apps**.
+- **macOS:** move `TradeSkillMaster.app` from Applications to Trash.
+- **Linux:** delete the AppImage.
+
+Application data can be removed separately if you do not want to keep settings and caches:
+
+| Platform | Application data location |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%\TSM-CrossPlatform` |
 | macOS | `~/Library/Application Support/TSM-CrossPlatform` |
 | Linux | `~/.local/share/TSM-CrossPlatform` |
 
-This directory contains settings, cached item data, local price history, and fallback exports. Login secrets are stored by the operating system credential service instead.
-
-## Account-sync security
-
-The initial identity password exchange uses HTTPS, but compatibility with the legacy private TSM session protocol includes plain HTTP requests. Use the application only on a trusted network. Access and session tokens stay in memory, and returned data-download URLs are upgraded to HTTPS.
-
-## Linux FAQ
-
-### Is this an official TradeSkillMaster Linux client?
-
-No. TSM Desktop is an independent, unofficial compatibility project. The name TradeSkillMaster is used only to explain which addon data and services the app interoperates with.
-
-### How do I run TradeSkillMaster desktop features on Linux?
-
-Download the latest `TSM-<version>-x86_64.AppImage` from GitHub Releases, make it executable, and launch it from a writable location. Point onboarding at the World of Warcraft directory containing `_retail_`, `_classic_`, or another supported client folder.
-
-### Which Linux distributions are supported?
-
-The AppImage targets x86_64 Linux desktops rather than one specific distribution. It is intended for distributions including Ubuntu, Debian, Linux Mint, Fedora, Arch Linux, Manjaro, and openSUSE. Exact compatibility depends on the distribution's AppImage and desktop support.
-
-### Does the Linux app update itself?
-
-Yes. Automatic checks are configurable, manual checks are available in Settings, and automatic installation is optional. The AppImage must remain in a writable location for in-place updates.
-
-### Does it manage the TradeSkillMaster addon too?
-
-Yes. The app detects installed World of Warcraft flavors and TSM addons, checks the selected release channel, and can update, reinstall, or remove supported addon installations.
+On Linux, also remove `~/.config/autostart/tradeskillmaster-crossplatform.desktop` if startup registration remains. If you uninstalled without resetting, remove the `TSM-CrossPlatform` credential manually from your operating system's credential or keyring manager.
 
 ## Build from source
 
-Install the .NET 10 SDK, then run:
+Install the .NET 10 SDK, then start the app with:
 
 ```bash
 dotnet run --project TSM/TSM.csproj
@@ -231,14 +217,14 @@ Run the verification suite with:
 dotnet run --project TSM.Tests/TSM.Tests.csproj
 ```
 
-Create a Linux AppImage after publishing:
+To build a Linux AppImage after publishing:
 
 ```bash
 dotnet publish TSM/TSM.csproj -c Release -r linux-x64 --self-contained true -o artifacts/publish/linux-x64
 packaging/linux/build-appimage.sh artifacts/publish/linux-x64 artifacts/packages 0.1.0 /path/to/appimagetool x86_64
 ```
 
-Maintainers can rebuild the bundled icon manifest from an existing local item cache with:
+Maintainers can rebuild the bundled icon manifest from an existing local item cache:
 
 ```bash
 scripts/generate-item-icon-manifest.sh ~/.local/share/TSM-CrossPlatform/ItemIcons TSM/Assets/item-icons.json.br
@@ -246,7 +232,7 @@ scripts/generate-item-icon-manifest.sh ~/.local/share/TSM-CrossPlatform/ItemIcon
 
 ### Build item data with Blizzard's API
 
-`TSM.ItemDatabaseBuilder` creates a resumable, flavor-aware JSONL item database from Blizzard's official Game Data API. Create an API client in the Battle.net developer portal, expose its credentials to the process, and provide a file containing the item IDs to fetch. Text and CSV inputs may contain one numeric ID per row or TSM item strings such as `i:19019`. JSON inputs may be arrays of IDs/item strings or objects with `id`, `itemId`, `item_id`, or `itemString` properties.
+`TSM.ItemDatabaseBuilder` creates a resumable, flavor-aware JSONL item database from Blizzard's Game Data API. Create a client in the Battle.net developer portal, provide the credentials as environment variables, and supply a text, CSV, or JSON file containing item IDs or TSM item strings such as `i:19019`.
 
 ```bash
 export BLIZZARD_CLIENT_ID="your-client-id"
@@ -260,47 +246,6 @@ dotnet run --project TSM.ItemDatabaseBuilder -- \
   --manifest TSM/Assets/item-icons.json.br
 ```
 
-The built-in editions map Vanilla to `static-classic1x-{region}`, TBC Anniversary to `static-classicann-{region}`, MoP progression to `static-classic-{region}`, and Retail to `static-{region}`. Blizzard does not provide stable historical namespaces for Wrath or Cataclysm. If an archived or versioned snapshot namespace is available, add it explicitly with `--catalog wrath=EXACT_NAMESPACE` or `--catalog cataclysm=EXACT_NAMESPACE`. Reusing the current MoP progression namespace would return later revisions of older items rather than authentic Wrath or Cataclysm data.
+## License and acknowledgements
 
-The builder stores both normalized fields and Blizzard's complete item/media responses. Runs resume from completed flavor/item pairs, honor API retry headers, and pause after throttling or transient server errors. Use `--refresh` to append refreshed records; readers should treat the final record for a flavor/item pair as authoritative. API namespaces change as Blizzard introduces clients and progression builds, so verify the current namespace in the Battle.net API documentation before producing a release database. Credentials are read only from environment variables and must never be committed or bundled with the desktop application.
-
-Item requests run concurrently with a shared request-rate limiter. Use `--concurrency` to control simultaneous item workers and `--requests-per-second` to cap the combined item and media request rate. Throttling responses pause and retry without discarding completed records.
-
-For a current flavor, the builder can enumerate item IDs directly from Blizzard's item-search endpoint instead of reusing an older expansion's ID list:
-
-```bash
-dotnet run --project TSM.ItemDatabaseBuilder -- \
-  --discover-ids \
-  --write-discovered-ids artifacts/item-data/mop-classic-item-ids.txt \
-  --edition mop \
-  --region eu \
-  --output artifacts/item-data/mop-classic.jsonl \
-  --concurrency 12 \
-  --requests-per-second 16
-```
-
-Discovery and item fetching are resumable through the JSONL output. Keeping the discovered ID file makes later database rebuilds reproducible even if Blizzard's search index changes.
-
-For large Retail catalogs, add `--auction-items-only`. Discovery rejects poor-quality and non-auction item classes directly from Blizzard's search results. The remaining item details are checked for bind-on-pickup, quest-bound, and account-bound status before the separate media request is made. Rejected detail IDs are stored in an adjacent `.excluded-ids` checkpoint instead of the JSONL, so an interrupted run resumes without downloading them again. This keeps the Retail source focused on auctionable items and avoids both the media request and large response payload for rejected records.
-
-Convert one or more completed JSONL catalogs into the release SQLite database without API credentials:
-
-```bash
-dotnet run --project TSM.ItemDatabaseBuilder -- \
-  --import-jsonl artifacts/item-data/tbc-anniversary.jsonl \
-  --import-jsonl artifacts/item-data/mop-classic.jsonl \
-  --import-jsonl artifacts/item-data/retail.jsonl \
-  --database TSM/Assets/items.db
-```
-
-Include every flavor source in the same command when rebuilding the combined database. The packaged SQLite catalog filters poor-quality vendor trash, the non-auction Money, Quest, Key, and Permanent item classes, and items Blizzard marks as bind-on-pickup, quest-bound, account-bound, or Battle.net-account-bound. Bind-on-equip, bind-on-use, and unbound items remain available. JSONL sources built without `--auction-items-only` remain complete, making the packaging filter reversible; the optimized Retail mode intentionally omits rejected records. Queryable fields are stored as indexed SQLite columns. The larger structured preview payload is Brotli-compressed per item so opening one tooltip does not load the full catalog into memory.
-
-Pushing a version tag such as `v0.2.0` runs the release workflow and publishes a Windows x64 setup executable, a macOS Apple Silicon DMG, a Linux x64 AppImage, and portable ZIPs used by the automatic updater. Older temporary workflow artifacts are removed after a successful release; GitHub Release downloads are retained.
-
-## Project notice
-
-This project is distributed under the [MIT License](LICENSE). It is a clean-room C#/Avalonia implementation based on the observable behavior required for compatibility with TradeSkillMaster data and services.
-
-TradeSkillMaster, TSM, World of Warcraft, Warcraft, Blizzard, Wowhead, and associated names, logos, artwork, game content, data, trademarks, and copyrights belong to their respective owners. References to them describe compatibility and interoperability only; this project claims no ownership of third-party intellectual property. The project's MIT License does not grant rights to third-party trademarks, copyrighted material, services, APIs, or data.
-
-Read the full [project notice](NOTICE.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+TSM Desktop is available under the [MIT License](LICENSE). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for included projects and licenses, and [NOTICE.md](NOTICE.md) for trademark and affiliation information.
