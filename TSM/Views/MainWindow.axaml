@@ -193,7 +193,7 @@
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
                           IsChecked="{Binding IsRealmDataSelected, Mode=OneWay}"
                           Command="{Binding ShowRealmDataCommand}"
-                          ToolTip.Tip="Realm data" AutomationProperties.Name="Realm data">
+                          ToolTip.Tip="Market data" AutomationProperties.Name="Market data">
               <lucide:LucideIcon Kind="Database" Size="20" StrokeWidth="1.8" />
             </ToggleButton>
             <ToggleButton Classes="nav" IsEnabled="{Binding IsLoggedIn}"
@@ -235,7 +235,7 @@
                            FontWeight="SemiBold" VerticalAlignment="Center" />
               </StackPanel>
             </Border>
-            <Button Grid.Column="3" Content="Add realm" Command="{Binding OpenSettingsCommand}"
+            <Button Grid.Column="3" Content="Add market" Command="{Binding OpenSettingsCommand}"
                     IsVisible="{Binding IsRealmDataSelected}" />
             <Button Grid.Column="4" Classes="icon" Command="{Binding RefreshCommand}"
                     IsEnabled="{Binding IsLoggedIn}" ToolTip.Tip="Refresh data">
@@ -250,7 +250,7 @@
               <Grid RowDefinitions="38,*">
                 <Border Background="#202020" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,0">
                   <Grid ColumnDefinitions="1.8*,1.05*,1.05*,*,*,1.25*,42">
-                    <TextBlock Text="REGION / REALM" Classes="field-label" VerticalAlignment="Center" />
+                    <TextBlock Text="REGION / MARKET" Classes="field-label" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="1" Text="WOW FLAVOR" Classes="field-label" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2" Text="CLIENT" Classes="field-label" VerticalAlignment="Center" />
                     <TextBlock Grid.Column="3" Text="AUCTIONDB" Classes="field-label" VerticalAlignment="Center" />
@@ -276,7 +276,7 @@
                           <TextBlock Grid.Column="4" Text="{Binding GreatDeals}" VerticalAlignment="Center" />
                           <TextBlock Grid.Column="5" Text="{Binding LastUpdated}" Classes="muted" VerticalAlignment="Center" />
                           <Button Grid.Column="6" Classes="icon" Width="30" Height="30" MinHeight="30"
-                                  ToolTip.Tip="Manage realm" Click="OpenRealmMenu">
+                                  ToolTip.Tip="Manage market" Click="OpenRealmMenu">
                             <TextBlock Text="⋯" FontSize="17" FontWeight="SemiBold"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                           </Button>
@@ -305,7 +305,7 @@
                   </Button>
                   </Grid>
                   <ComboBox Grid.Column="1" ItemsSource="{Binding AuctionRealmOptions}"
-                          SelectedItem="{Binding SelectedAuctionRealm}" PlaceholderText="All realms"
+                          SelectedItem="{Binding SelectedAuctionRealm}" PlaceholderText="All markets"
                           HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" />
                   <ComboBox Grid.Column="2" ItemsSource="{Binding AuctionFactionOptions}"
                           SelectedItem="{Binding SelectedAuctionFaction}"
@@ -655,7 +655,7 @@
                           <DataTemplate>
                             <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="0,9,0,11">
                               <StackPanel Spacing="8">
-                                <TextBlock Text="{Binding Faction}" Foreground="{Binding FactionColor}"
+                                <TextBlock Text="{Binding Label}" Foreground="{Binding FactionColor}"
                                            FontSize="11" FontWeight="SemiBold" />
                                 <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
                                       ColumnSpacing="12" RowSpacing="8">
@@ -748,11 +748,15 @@
                             <TextBlock Grid.Column="1" Text="{Binding Version}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="2" Text="{Binding Status}" Foreground="{Binding StatusColor}"
                                        VerticalAlignment="Center" />
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="7"
-                                        IsVisible="{Binding CanManage}">
-                              <Button Classes="ghost" Content="Reinstall" Click="ReinstallAddonClick"
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="7">
+                              <Button Classes="primary" Content="Install" Click="InstallAddonClick"
+                                      IsVisible="{Binding CanInstall}"
+                                      ToolTip.Tip="Install AppHelper for this WoW client" />
+                              <Button Classes="ghost" Content="Reinstall" Click="InstallAddonClick"
+                                      IsVisible="{Binding CanManage}"
                                       ToolTip.Tip="Download and replace this addon with the current channel version" />
                               <Button Classes="danger" Content="Remove" Click="RemoveAddonClick"
+                                      IsVisible="{Binding CanManage}"
                                       ToolTip.Tip="Remove this addon from the selected WoW client" />
                             </StackPanel>
                           </Grid>
@@ -822,7 +826,7 @@
                             SelectedItem="{Binding SelectedAccount}" HorizontalAlignment="Stretch">
                     <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
                   </ComboBox>
-                  <ComboBox Grid.Column="1" PlaceholderText="Choose a realm" ItemsSource="{Binding AccountingRealms}"
+                  <ComboBox Grid.Column="1" PlaceholderText="{Binding AccountingWorldPlaceholder}" ItemsSource="{Binding AccountingRealms}"
                             SelectedItem="{Binding SelectedRealm}" HorizontalAlignment="Stretch" />
                   <ComboBox Grid.Column="2" ItemsSource="{Binding AccountingPlayers}"
                             SelectedItem="{Binding SelectedAccountingPlayer, Mode=TwoWay}"
@@ -1145,7 +1149,7 @@
                           <DataTemplate>
                             <Border BorderBrush="#303030" BorderThickness="0,0,0,1" Padding="0,9,0,11">
                               <StackPanel Spacing="8">
-                                <TextBlock Text="{Binding Faction}" Foreground="{Binding FactionColor}"
+                                <TextBlock Text="{Binding Label}" Foreground="{Binding FactionColor}"
                                            FontSize="11" FontWeight="SemiBold" />
                                 <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"
                                       ColumnSpacing="12" RowSpacing="8">
@@ -1218,18 +1222,18 @@
                     </Grid>
                     <Border Height="1" Background="{StaticResource BorderBrush}" />
                     <StackPanel Spacing="4">
-                      <TextBlock Text="Realm management" Classes="section-title" />
-                      <TextBlock Text="Add another realm from your connected TSM account." Classes="muted" FontSize="10" />
+                      <TextBlock Text="Market management" Classes="section-title" />
+                      <TextBlock Text="Add a realm or a Forever ruleset market from your connected TSM account." Classes="muted" FontSize="10" />
                     </StackPanel>
                     <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
-                      <TextBlock Text="Add realm" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
+                      <TextBlock Text="Add market" FontWeight="SemiBold" FontSize="11" VerticalAlignment="Center" />
                       <StackPanel Grid.Column="1" Spacing="7">
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsLoggedIn}">
                           <ComboBox ItemsSource="{Binding AvailableRealms}" SelectedItem="{Binding SelectedAvailableRealm}"
-                                    PlaceholderText="No additional realms available">
+                                    PlaceholderText="No additional markets available">
                             <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
                           </ComboBox>
-                          <Button Grid.Column="1" Classes="primary" Content="Add realm" Command="{Binding AddRealmCommand}" />
+                          <Button Grid.Column="1" Classes="primary" Content="Add market" Command="{Binding AddRealmCommand}" />
                         </Grid>
                         <TextBlock Text="{Binding RealmManagementStatus}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
                       </StackPanel>
@@ -1429,11 +1433,11 @@
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="26" RowDefinitions="Auto,Auto" RowSpacing="24">
                       <StackPanel Spacing="8">
                         <TextBlock Text="Getting started" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock Text="Choose the World of Warcraft folder containing client folders such as _retail_, _forever_, or _anniversary_. TradeSkillMaster and AppHelper must already be installed in each client you want to use."
+                        <TextBlock Text="Choose the World of Warcraft folder containing client folders such as _retail_, _forever_, or _anniversary_. Install TradeSkillMaster in each client you use, then use the Addons page to install AppHelper."
                                    Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
                       </StackPanel>
                       <StackPanel Grid.Column="1" Spacing="8">
-                        <TextBlock Text="Realm data is missing" FontSize="12" FontWeight="SemiBold" />
+                        <TextBlock Text="Market data is missing" FontSize="12" FontWeight="SemiBold" />
                         <TextBlock Text="Confirm AppHelper is installed, sign in, then use Refresh or Sync now. The top-bar indicator turns green after a successful recent sync."
                                    Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
                       </StackPanel>
@@ -1528,7 +1532,7 @@
             <Image Width="48" Height="48" Source="/Assets/tsm-app.png" HorizontalAlignment="Left" />
             <StackPanel Spacing="5">
               <TextBlock Text="TSM Desktop" FontSize="24" FontWeight="SemiBold" Foreground="#EEEEEE" />
-              <TextBlock Text="Realm data, addon updates, and local accounting tools."
+              <TextBlock Text="Market data, addon updates, and local accounting tools."
                          Foreground="#A0A0A0" FontSize="12" TextWrapping="Wrap" LineHeight="18" />
             </StackPanel>
           </StackPanel>

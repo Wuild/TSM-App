@@ -808,7 +808,7 @@ static async Task AuthenticateAndSyncAppData()
             progressionRealm.Name);
         Assert(handler.SawRealmRemove, "realm remove endpoint was not called with the selected region and name");
         var foreverRealm = availableRealms.Single(realm => realm.GameVersion == "forever");
-        Assert(foreverRealm.DisplayName == "Forever-EU-Normal-Alliance", "Forever realm was not labeled correctly");
+        Assert(foreverRealm.DisplayName == "Forever · EU · Normal · Alliance", "Forever market was not labeled correctly");
         await client.AddRealmAsync(foreverRealm.GameVersion, foreverRealm.Id);
         await client.RemoveRealmAsync(foreverRealm.GameVersion, foreverRealm.Region, foreverRealm.Name);
         var uploadPath = new[] { "US", "RHJhZW5vcg==", "QUNDT1VOVCMx" };
@@ -913,13 +913,12 @@ static async Task SyncForever()
     var helper = Path.Combine(addons, "TradeSkillMaster_AppHelper");
     var retailHelper = Path.Combine(root, "_retail_", "Interface", "AddOns", "TradeSkillMaster_AppHelper");
     var savedVariables = Path.Combine(forever, "WTF", "Account", "ACCOUNT#1", "SavedVariables");
-    Directory.CreateDirectory(helper);
+    Directory.CreateDirectory(addons);
     Directory.CreateDirectory(retailHelper);
     Directory.CreateDirectory(savedVariables);
 
     try
     {
-        File.WriteAllText(Path.Combine(helper, "TradeSkillMaster_AppHelper.toc"), "## Version: 4.15.2");
         File.WriteAllText(Path.Combine(savedVariables, "TradeSkillMaster.lua"),
             SavedVariablesFixture().Replace("Draenor", "Normal", StringComparison.Ordinal));
         var discovery = new WowInstallationService();
@@ -927,9 +926,6 @@ static async Task SyncForever()
         var foreverClient = installations.Single(client => client.Name == "Forever");
         Assert(foreverClient.RootPath == forever && foreverClient.AddOnsPath == addons,
             "Forever did not resolve its own client and addon paths");
-        Assert(discovery.ScanAddons(installations).Any(addon => addon.ClientName == "Forever"),
-            "the installed Forever addon was not discovered");
-
         var status = JsonSerializer.Deserialize<TsmStatusResponse>("""
             {
               "realms":[{"name":"Normal","region":"EU","appDataStrings":{
@@ -944,6 +940,15 @@ static async Task SyncForever()
             }
             """)!;
         var api = new FakeApiClient(status);
+        var updater = new AddonUpdateService(api);
+        api.AddonArchive = CreateAddonZip(("TradeSkillMaster_AppHelper/extra.txt", "missing manifest"));
+        await AssertThrowsAsync<InvalidDataException>(() => updater.InstallAppHelperAsync(addons, "4.15.2", "Release"));
+        Assert(!Directory.Exists(helper), "an invalid AppHelper package left a partially installed addon");
+        api.AddonArchive = CreateAddonZip(("TradeSkillMaster_AppHelper/TradeSkillMaster_AppHelper.toc", "## Version: 4.15.2"));
+        await updater.InstallAppHelperAsync(addons, "4.15.2", "Release");
+        await AssertThrowsAsync<IOException>(() => updater.InstallAppHelperAsync(addons, "4.15.2", "Release"));
+        Assert(discovery.ScanAddons(installations).Any(addon => addon.ClientName == "Forever" && addon.Version == "4.15.2"),
+            "the freshly installed Forever AppHelper was not discovered");
         var parser = new AppDataCatalogParser();
         var lua = new LuaSavedVariablesParser();
         var accounting = new AccountingService(lua);
@@ -963,9 +968,10 @@ static async Task SyncForever()
                retailData.LastUpdate("AUCTIONDB_NON_COMMODITY_DATA", "Normal-Alliance") == 0,
             "AppHelper data crossed client boundaries or lost its server key");
         var statuses = new RealmDataService(lua, parser).GetRealmStatuses([account], installations);
-        Assert(statuses.Count == 2 && statuses.All(row => row.RegionRealm == "Normal" && row.AuctionDb == "Available") &&
-               statuses.Select(row => row.GameVersion).ToHashSet().SetEquals(["Forever", "Retail"]),
-            "realm data from clients with the same market name was merged");
+        Assert(statuses.Count == 2 && statuses.All(row => row.AuctionDb == "Available") &&
+               statuses.Single(row => row.GameVersion == "Forever").RegionRealm == "EU · Normal · Alliance" &&
+               statuses.Single(row => row.GameVersion == "Retail").RegionRealm == "Normal",
+            "Forever market status lost its region, ruleset, faction, or client");
 
         var foreverAppDataPath = Path.Combine(helper, "AppData.lua");
         await new AppDataFileWriter(parser).WriteAsync(foreverAppDataPath,
@@ -974,6 +980,8 @@ static async Task SyncForever()
                 "{fields={\"itemString\",\"minBuyout\"},data={{273946,1}}}", 1700000500),
             new("AUCTIONDB_NON_COMMODITY_DATA", "Hardcore-Alliance",
                 "{fields={\"itemString\",\"minBuyout\"},data={{273946,2}}}", 1700000500),
+            new("AUCTIONDB_NON_COMMODITY_DATA", "Roleplay PvP-Horde",
+                "{fields={\"itemString\",\"minBuyout\"},data={{273946,5}}}", 1700000500),
             new("AUCTIONDB_REGION_SALE", "Forever-EU",
                 "{fields={\"itemString\",\"regionSale\"},data={{273946,3}}}", 1700000500),
             new("AUCTIONDB_REGION_SALE", "Forever-HC-EU",
@@ -981,11 +989,36 @@ static async Task SyncForever()
         ]);
         await File.WriteAllTextAsync(account.AppHelperSavedVariablesPath,
             "TradeSkillMaster_AppHelperDB = { region = 'EU-Forever-HC' }");
+        await File.WriteAllTextAsync(account.SavedVariablesPath, """
+            TradeSkillMasterDB = { _scopeKeys = {
+                realm = { "Normal", "Roleplay" },
+                factionrealm = { "Horde - Normal", "Horde - Roleplay" },
+            } }
+            """);
+        var foreverStatuses = new RealmDataService(lua, parser).GetRealmStatuses([account], installations)
+            .Where(row => row.GameVersion == "Forever").ToArray();
+        Assert(foreverStatuses.Single(row => row.MarketKey == "Normal-Horde").AuctionDb == "Missing" &&
+               foreverStatuses.Single(row => row.MarketKey == "Roleplay-Horde").AuctionDb == "Missing" &&
+               foreverStatuses.Single(row => row.MarketKey == "Roleplay PvP-Horde").AuctionDb == "Available",
+            "market status used prices from a different faction or ruleset");
+
+        var usAppDataPath = Path.Combine(root, "US-AppData.lua");
+        await new AppDataFileWriter(parser).WriteAsync(usAppDataPath,
+        [
+            new("AUCTIONDB_NON_COMMODITY_DATA", "Normal-Alliance",
+                "{fields={\"itemString\",\"minBuyout\"},data={{273946,6}}}", 1700000500),
+            new("AUCTIONDB_REGION_SALE", "Forever-US",
+                "{fields={\"itemString\",\"regionSale\"},data={{273946,7}}}", 1700000500)
+        ]);
         var auctionRows = new AuctionHouseService(parser, lua).BuildIndex(
-            [account with { AppDataPath = foreverAppDataPath }], installations);
-        Assert(auctionRows.Single(row => row.Realm == "Normal-Alliance").RegionSaleAverage == 3 &&
+            [account with { AppDataPath = foreverAppDataPath }, account with { AppDataPath = usAppDataPath }],
+            installations);
+        Assert(auctionRows.Single(row => row.Realm == "Normal-Alliance" &&
+                   row.MarketFilterKey == "Forever · EU · Normal").RegionSaleAverage == 3 &&
+               auctionRows.Single(row => row.Realm == "Normal-Alliance" &&
+                   row.MarketFilterKey == "Forever · US · Normal").RegionSaleAverage == 7 &&
                auctionRows.Single(row => row.Realm == "Hardcore-Alliance").RegionSaleAverage == 4,
-            "Forever regional sale data crossed rulesets");
+            "Forever auction prices or regional sale data crossed regions or rulesets");
 
         var backup = new BackupService(new AppPaths(Path.Combine(root, "data")), api, () => "system").CreateNow(account);
         Assert(backup.Account == "ACCOUNT#1-Forever", "Forever backups reused the Retail account key");

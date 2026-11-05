@@ -30,7 +30,8 @@ public sealed record AuctionHouseItemRow(
     DateTimeOffset UpdatedAt,
     long? RegionSaleAverage = null,
     long? RegionSoldPerDay = null,
-    long? RegionSaleRatePercent = null)
+    long? RegionSaleRatePercent = null,
+    string MarketRegion = "")
 {
     public string MinBuyoutDisplay => FormatMoney(MinBuyout);
     public string MarketValueDisplay => FormatMoney(MarketValueRecent);
@@ -60,13 +61,27 @@ public sealed record AuctionHouseItemRow(
         ? Realm[..^"-Alliance".Length]
         : Realm.EndsWith("-Horde", StringComparison.OrdinalIgnoreCase)
             ? Realm[..^"-Horde".Length]
-            : Realm;
+            : ForeverMarket.IsForever(Flavor) && Realm.EndsWith("-Neutral", StringComparison.OrdinalIgnoreCase)
+                ? Realm[..^"-Neutral".Length]
+                : Realm;
     public string Faction => Realm.EndsWith("-Alliance", StringComparison.OrdinalIgnoreCase)
         ? "Alliance"
         : Realm.EndsWith("-Horde", StringComparison.OrdinalIgnoreCase)
             ? "Horde"
-            : "Both";
-    public string RealmFactionDisplay => Faction == "Both" ? BaseRealm : $"{BaseRealm} · {Faction}";
+            : ForeverMarket.IsForever(Flavor) && Realm.EndsWith("-Neutral", StringComparison.OrdinalIgnoreCase)
+                ? "Neutral"
+                : "Both";
+    public string MarketFilterKey => MarketRegion.Length == 0
+        ? $"{Flavor} · {BaseRealm}"
+        : $"{Flavor} · {MarketRegion} · {BaseRealm}";
+    public string RealmFactionDisplay
+    {
+        get
+        {
+            var name = Faction == "Both" ? BaseRealm : $"{BaseRealm} · {Faction}";
+            return MarketRegion.Length == 0 ? name : $"{MarketRegion} · {name}";
+        }
+    }
     public string UpdatedDisplay => UpdatedAt == DateTimeOffset.MinValue
         ? "Unknown"
         : UpdatedAt.ToLocalTime().ToString("g");

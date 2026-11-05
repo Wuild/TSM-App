@@ -14,9 +14,23 @@ public sealed partial class AuctionHouseService(
         var accountList = accounts.ToArray();
         var names = BuildItemNameLookup(accountList);
         var sources = new Dictionary<string, AuctionSource>(StringComparer.OrdinalIgnoreCase);
-        foreach (var account in accountList.Where(account => File.Exists(account.AppDataPath)))
-            sources[account.AppDataPath] = new AuctionSource(account.GameVersion,
-                ReadRegion(account.AppHelperSavedVariablesPath));
+        foreach (var group in accountList.Where(account => File.Exists(account.AppDataPath))
+                     .GroupBy(account => account.AppDataPath, StringComparer.OrdinalIgnoreCase))
+        {
+            var account = group.Last();
+            string region;
+            if (ForeverMarket.IsForever(account.GameVersion))
+            {
+                var regions = group.Select(value => ForeverMarket.RegionCode(ReadRegion(value.AppHelperSavedVariablesPath)))
+                    .Where(value => value.Length > 0).Distinct().Take(2).ToArray();
+                region = regions.Length == 1 ? regions[0] : string.Empty;
+            }
+            else
+            {
+                region = ReadRegion(account.AppHelperSavedVariablesPath);
+            }
+            sources[group.Key] = new AuctionSource(account.GameVersion, region);
+        }
         foreach (var installation in installations)
         {
             var path = FindAppDataPath(installation.AddOnsPath);
@@ -26,7 +40,7 @@ public sealed partial class AuctionHouseService(
                     : new AuctionSource(installation.Name, string.Empty);
         }
 
-        var rows = new Dictionary<(string Flavor, string Realm, string Item), MutableRow>();
+        var rows = new Dictionary<(string Flavor, string Region, string Realm, string Item), MutableRow>();
         foreach (var (path, source) in sources)
         {
             AppDataCatalog catalog;
@@ -42,32 +56,43 @@ public sealed partial class AuctionHouseService(
             var regionEntries = catalog.Entries
                 .Where(entry => entry.Type == "AUCTIONDB_REGION_SALE")
                 .ToArray();
+            var isForever = ForeverMarket.IsForever(source.Flavor);
+            var marketRegion = isForever ? ForeverMarket.GetDataRegion(catalog, source.Region) : string.Empty;
             var normalRegion = source.Region;
             Dictionary<string, DecodedAuctionRow>? hardcoreSales = null;
-            if (string.Equals(source.Flavor, "Forever", StringComparison.OrdinalIgnoreCase))
+            if (isForever)
             {
-                if (normalRegion.EndsWith("-HC", StringComparison.OrdinalIgnoreCase))
-                    normalRegion = normalRegion[..^3];
-                var hardcoreRegion = normalRegion.Length == 0 ? string.Empty : normalRegion + "-HC";
-                hardcoreSales = BuildRegionalSales(regionEntries.Where(entry =>
-                    entry.Realm.StartsWith("Forever-HC-", StringComparison.OrdinalIgnoreCase)).ToArray(),
-                    hardcoreRegion);
+                normalRegion = marketRegion.Length == 0 ? string.Empty : $"Forever-{marketRegion}";
+                var hardcoreRegion = marketRegion.Length == 0 ? string.Empty : $"Forever-HC-{marketRegion}";
+                hardcoreSales = marketRegion.Length == 0 ? new(StringComparer.OrdinalIgnoreCase)
+                    : BuildRegionalSales(regionEntries.Where(entry =>
+                        entry.Realm.StartsWith("Forever-HC-", StringComparison.OrdinalIgnoreCase)).ToArray(),
+                        hardcoreRegion);
                 regionEntries = regionEntries.Where(entry =>
                     !entry.Realm.StartsWith("Forever-HC-", StringComparison.OrdinalIgnoreCase)).ToArray();
             }
-            var regionalSales = BuildRegionalSales(regionEntries, normalRegion);
+            var regionalSales = isForever && marketRegion.Length == 0 ? new(StringComparer.OrdinalIgnoreCase)
+                : BuildRegionalSales(regionEntries, normalRegion);
 
             foreach (var entry in catalog.Entries.Where(entry =>
                          entry.Type.StartsWith("AUCTIONDB_", StringComparison.Ordinal) &&
                          !entry.Type.StartsWith("AUCTIONDB_REGION_", StringComparison.Ordinal)))
             {
-                var sales = hardcoreSales is not null && entry.Realm.StartsWith("Hardcore-",
-                    StringComparison.OrdinalIgnoreCase) ? hardcoreSales : regionalSales;
+                var marketKey = entry.Realm;
+                var sales = regionalSales;
+                if (hardcoreSales is not null)
+                {
+                    if (!ForeverMarket.TryParse(entry.Realm, out var market))
+                        continue;
+                    marketKey = market.Key;
+                    if (market.Ruleset == "Hardcore")
+                        sales = hardcoreSales;
+                }
                 foreach (var decoded in ParseEntry(entry))
                 {
-                    var key = (source.Flavor, entry.Realm, decoded.ItemString);
+                    var key = (source.Flavor, marketRegion, marketKey, decoded.ItemString);
                     if (!rows.TryGetValue(key, out var current))
-                        current = new MutableRow(source.Flavor, entry.Realm, decoded.ItemString);
+                        current = new MutableRow(source.Flavor, marketRegion, marketKey, decoded.ItemString);
                     current.Apply(decoded, entry.UpdatedAtUnix);
                     if (sales.TryGetValue(BaseItemString(decoded.ItemString), out var regionalSale))
                         current.ApplyRegionalSale(regionalSale);
@@ -233,7 +258,7 @@ public sealed partial class AuctionHouseService(
     internal sealed record DecodedAuctionRow(string ItemString, IReadOnlyDictionary<string, long> Values);
     private sealed record AuctionSource(string Flavor, string Region);
 
-    private sealed class MutableRow(string flavor, string realm, string itemString)
+    private sealed class MutableRow(string flavor, string region, string realm, string itemString)
     {
         public string Flavor { get; } = flavor;
         public string Realm { get; } = realm;
@@ -270,7 +295,7 @@ public sealed partial class AuctionHouseService(
         public AuctionHouseItemRow ToRow(string name) => new(
             ItemString, name, Realm, Flavor, MinBuyout, NumAuctions, MarketValueRecent, Historical,
             UpdatedAtUnix > 0 ? DateTimeOffset.FromUnixTimeSeconds(UpdatedAtUnix) : DateTimeOffset.MinValue,
-            RegionSaleAverage, RegionSoldPerDay, RegionSaleRatePercent);
+            RegionSaleAverage, RegionSoldPerDay, RegionSaleRatePercent, region);
 
         private static long? Get(DecodedAuctionRow row, string field) =>
             row.Values.TryGetValue(field, out var value) && value > 0 ? value : null;

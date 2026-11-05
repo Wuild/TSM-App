@@ -628,7 +628,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     public bool IsSettingsSelected => IsSettingsOpen;
     public string CurrentPageTitle => IsSettingsOpen ? "Settings" : SelectedTab switch
     {
-        0 => "Realm data",
+        0 => "Market data",
         1 => "Addons",
         2 => "Accounting",
         3 => "Auction House",
@@ -643,6 +643,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if (!SetProperty(ref _selectedAccount, value))
                 return;
             Settings.SelectedAccountingAccount = value?.DisplayName ?? string.Empty;
+            OnPropertyChanged(nameof(AccountingWorldPlaceholder));
             var wasSuppressed = _suppressAccountingRefresh;
             _suppressAccountingRefresh = true;
             try
@@ -657,6 +658,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             InvalidateAccountingStatistics();
         }
     }
+
+    public string AccountingWorldPlaceholder => ForeverMarket.IsForever(SelectedAccount?.GameVersion ?? string.Empty)
+        ? "Choose a ruleset"
+        : "Choose a realm";
 
     public string? SelectedRealm
     {
@@ -733,7 +738,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         {
             if (SetProperty(ref _selectedAuctionRealm, value))
             {
-                Settings.SelectedAuctionRealm = value ?? "All realms";
+                Settings.SelectedAuctionRealm = value ?? AppSettings.AllAuctionMarkets;
                 QueueAuctionSearch();
             }
         }
@@ -973,30 +978,35 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             : "That folder does not contain a recognizable WoW installation.";
     }
 
-    public async Task ReinstallAddonAsync(AddonStatusRow addon)
+    public async Task InstallOrReinstallAddonAsync(AddonStatusRow addon)
     {
-        if (IsBusy || !addon.CanManage)
+        if (IsBusy || (!addon.CanManage && !addon.CanInstall))
             return;
         IsBusy = true;
+        var action = addon.CanInstall ? "install" : "reinstall";
         AddonManagementStatus = $"Finding the latest {addon.DisplayName} package for {addon.ClientName}…";
         try
         {
             if (!_apiClient.IsAuthenticated)
-                throw new InvalidOperationException("Sign in before reinstalling an addon.");
+                throw new InvalidOperationException($"Sign in before attempting to {action} an addon.");
             var status = await _apiClient.GetStatusAsync(Settings.ReleaseChannel);
             var available = status.Addons.FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, addon.AddonName, StringComparison.OrdinalIgnoreCase));
             if (available is null || string.IsNullOrWhiteSpace(available.Version))
                 throw new InvalidOperationException($"TSM did not provide a {addon.AddonName} package for the {Settings.ReleaseChannel} channel.");
 
-            await new AddonUpdateService(_apiClient).ReinstallAsync(addon.AddOnsPath, addon.AddonName,
-                available.Version, Settings.ReleaseChannel);
+            var updater = new AddonUpdateService(_apiClient);
+            if (addon.CanInstall)
+                await updater.InstallAppHelperAsync(addon.AddOnsPath, available.Version, Settings.ReleaseChannel);
+            else
+                await updater.ReinstallAsync(addon.AddOnsPath, addon.AddonName, available.Version, Settings.ReleaseChannel);
             RefreshLocalData();
-            AddonManagementStatus = $"Reinstalled {addon.DisplayName} {available.Version} for {addon.ClientName}.";
+            var completed = addon.CanInstall ? "Installed" : "Reinstalled";
+            AddonManagementStatus = $"{completed} {addon.DisplayName} {available.Version} for {addon.ClientName}.";
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            AddonManagementStatus = $"Could not reinstall {addon.DisplayName}: {exception.Message}";
+            AddonManagementStatus = $"Could not {action} {addon.DisplayName}: {exception.Message}";
         }
         finally
         {
@@ -1425,7 +1435,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private async Task LoadAvailableRealmsAsync()
     {
-        RealmManagementStatus = "Loading available realms…";
+        RealmManagementStatus = "Loading available markets…";
         try
         {
             if (!_apiClient.IsAuthenticated)
@@ -1446,12 +1456,12 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             _logService.WriteSync("info",
                 $"Realm catalog loaded: {realms.Count} returned, {available.Length} available after filtering.");
             RealmManagementStatus = AvailableRealms.Count == 0
-                ? $"No additional realms are available ({realms.Count} returned by TSM)."
-                : $"{AvailableRealms.Count} realm(s) available.";
+                ? $"No additional markets are available ({realms.Count} returned by TSM)."
+                : $"{AvailableRealms.Count} market(s) available.";
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            RealmManagementStatus = $"Could not load realms: {exception.Message}";
+            RealmManagementStatus = $"Could not load markets: {exception.Message}";
             _logService.WriteSync("error", RealmManagementStatus);
         }
     }
@@ -1469,7 +1479,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             Settings.HiddenLocalRealms.RemoveAll(hidden =>
                 string.Equals(hidden.GameVersion, realm.GameVersion, StringComparison.OrdinalIgnoreCase) &&
                 (string.Equals(hidden.Id, realm.Id, StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(hidden.Name, realm.Name, StringComparison.OrdinalIgnoreCase)));
+                 (string.Equals(hidden.Name, realm.Name, StringComparison.OrdinalIgnoreCase) &&
+                  (!ForeverMarket.IsForever(realm.GameVersion) ||
+                   ForeverMarket.RegionCode(hidden.Region) == ForeverMarket.RegionCode(realm.Region)))));
             if (!Settings.ManagedRealms.Any(managed =>
                     string.Equals(managed.GameVersion, realm.GameVersion, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(managed.Id, realm.Id, StringComparison.OrdinalIgnoreCase)))
@@ -1482,7 +1494,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                 _settingsStore.Save(Settings);
                 SyncManagedRealmsCommand.RaiseCanExecuteChanged();
             }
-            RealmManagementStatus = $"Added {realm.DisplayName}. Refreshing realm data…";
+            RealmManagementStatus = $"Added {realm.DisplayName}. Refreshing market data…";
             await SyncDataAsync();
             AvailableRealms.Remove(realm);
             SelectedAvailableRealm = AvailableRealms.FirstOrDefault();
@@ -1551,7 +1563,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            RealmManagementStatus = $"Could not sync added realms: {exception.Message}";
+            RealmManagementStatus = $"Could not sync added markets: {exception.Message}";
         }
         finally
         {
@@ -1722,7 +1734,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                     ? $"; uploaded {result.UploadedDataSets} data set(s)"
                     : "; addon uploads disabled";
                 StatusDetail = result.DownloadedEntries == 0
-                    ? $"Realm data is current ({result.WrittenFiles} AppHelper installation(s)){uploadStatus}"
+                    ? $"Market data is current ({result.WrittenFiles} AppHelper installation(s)){uploadStatus}"
                     : $"Downloaded {result.DownloadedEntries} data set(s) into {result.WrittenFiles} AppHelper installation(s){uploadStatus}";
             }
             _logService.WriteSync(result.Errors.Count == 0 ? "info" : "warning",
@@ -2320,6 +2332,14 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             _knownAddonVersions[addon.Name] = addon.Version;
             AddonStatuses.Add(addon);
         }
+        foreach (var installation in _installations.Where(installation => !scannedAddons.Any(addon =>
+                     string.Equals(addon.AddonName, AddonUpdateService.AppHelperName, StringComparison.OrdinalIgnoreCase) &&
+                     string.Equals(addon.AddOnsPath, installation.AddOnsPath, StringComparison.OrdinalIgnoreCase))))
+        {
+            var name = AddonUpdateService.AppHelperName;
+            AddonStatuses.Add(new AddonStatusRow($"{name} · {installation.Name}", "—", "Not installed", "#F5A623",
+                name, installation.Name, installation.AddOnsPath, IsMissing: true));
+        }
         _hasAddonBaseline = true;
 
         if (_installations.Count == 0)
@@ -2338,7 +2358,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         if (_installations.Count > 0)
         {
             HeaderText = "Local game data connected";
-            StatusDetail = $"{_installations.Count} client(s), {AddonStatuses.Count} addon folder(s), {RealmStatuses.Count} realm(s)";
+            StatusDetail = $"{_installations.Count} client(s), {scannedAddons.Count} addon folder(s), {RealmStatuses.Count} market(s)";
         }
         _localDiscoveryFingerprint = _wowService.GetDiscoveryFingerprint(Settings.WowPath);
         CheckAddonUpdatesCommand.RaiseCanExecuteChanged();
@@ -2455,15 +2475,23 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             _auctionIndex = _auctionHouseService.BuildIndex(AccountingAccounts, _installations);
             _auctionPriceHistory.Capture(Settings.AuctionFavorites, _auctionIndex);
             AuctionRealmOptions.Clear();
-            AuctionRealmOptions.Add("All realms");
+            AuctionRealmOptions.Add(AppSettings.AllAuctionMarkets);
             foreach (var realm in _auctionIndex
-                         .Select(item => $"{item.Flavor} · {item.BaseRealm}")
+                         .Select(item => item.MarketFilterKey)
                          .Distinct(StringComparer.OrdinalIgnoreCase)
                          .Order(StringComparer.OrdinalIgnoreCase))
                 AuctionRealmOptions.Add(realm);
-            SelectedAuctionRealm = AuctionRealmOptions.FirstOrDefault(option =>
-                                       string.Equals(option, previousRealm, StringComparison.OrdinalIgnoreCase))
-                                   ?? AuctionRealmOptions.FirstOrDefault();
+            var selectedMarket = AuctionRealmOptions.FirstOrDefault(option =>
+                string.Equals(option, previousRealm, StringComparison.OrdinalIgnoreCase));
+            if (selectedMarket is null && previousRealm?.StartsWith("Forever · ", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                var markets = _auctionIndex.Where(item => string.Equals($"{item.Flavor} · {item.BaseRealm}",
+                        previousRealm, StringComparison.OrdinalIgnoreCase))
+                    .Select(item => item.MarketFilterKey).Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+                if (markets.Length == 1)
+                    selectedMarket = markets[0];
+            }
+            SelectedAuctionRealm = selectedMarket ?? AppSettings.AllAuctionMarkets;
             QueueAuctionSearch();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
@@ -2633,6 +2661,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         AuctionSortColumn sortColumn, bool sortDescending, CancellationToken cancellationToken)
     {
         var filterRealm = !string.IsNullOrWhiteSpace(selectedRealm) &&
+                          !string.Equals(selectedRealm, AppSettings.AllAuctionMarkets, StringComparison.OrdinalIgnoreCase) &&
                           !string.Equals(selectedRealm, "All realms", StringComparison.OrdinalIgnoreCase);
         var searchTerms = searchText.Split(' ',
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -2642,7 +2671,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             if ((itemIndex & 255) == 0)
                 cancellationToken.ThrowIfCancellationRequested();
             var item = index[itemIndex];
-            if (filterRealm && !string.Equals($"{item.Flavor} · {item.BaseRealm}", selectedRealm,
+            if (filterRealm && !string.Equals(item.MarketFilterKey, selectedRealm,
                     StringComparison.OrdinalIgnoreCase))
                 continue;
             if (!string.Equals(selectedFaction, "Both", StringComparison.OrdinalIgnoreCase) &&
@@ -2777,7 +2806,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         return new AuctionHouseItemRow(
             first.ItemString,
             variants.Select(item => item.ItemName).FirstOrDefault(name => name != first.ItemString) ?? first.ItemName,
-            variants.Count == 1 ? first.Realm : "Multiple realms",
+            variants.Count == 1 ? first.Realm : ForeverMarket.IsForever(first.Flavor) ? "Multiple markets" : "Multiple realms",
             first.Flavor,
             MinimumPositive(variants.Select(item => item.MinBuyout)),
             SumPositive(variants.Select(item => item.NumAuctions)),
@@ -2786,7 +2815,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             variants.Max(item => item.UpdatedAt),
             AveragePositive(variants.Select(item => item.RegionSaleAverage)),
             AveragePositive(variants.Select(item => item.RegionSoldPerDay)),
-            AveragePositive(variants.Select(item => item.RegionSaleRatePercent)));
+            AveragePositive(variants.Select(item => item.RegionSaleRatePercent)),
+            variants.Count == 1 ? first.MarketRegion : string.Empty);
     }
 
     private static long? MinimumPositive(IEnumerable<long?> values) =>
@@ -2851,7 +2881,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private void UpdateAuctionResultSummary()
     {
         AuctionResultSummary = _auctionTotalIndexed == 0
-            ? "No AuctionDB item data was found. Sync a realm with AppHelper installed first."
+            ? "No AuctionDB item data was found. Install AppHelper from the Addons page, then sync market data."
             : AuctionResults.Count < _auctionMatches.Count
                 ? $"Showing {AuctionResults.Count:N0} of {_auctionMatches.Count:N0} matches · scroll for more"
                 : $"{_auctionMatches.Count:N0} item price record(s) · {_auctionTotalIndexed:N0} indexed locally";
@@ -3208,9 +3238,6 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
         foreach (var managed in Settings.ManagedRealms)
         {
-            var displayName = string.IsNullOrWhiteSpace(managed.Region)
-                ? managed.Name
-                : $"{managed.Region.ToUpperInvariant()}-{managed.Name}";
             if (RealmStatuses.Any(row => StatusMatchesRealm(row, managed)))
             {
                 var index = RealmStatuses.ToList().FindIndex(row => StatusMatchesRealm(row, managed));
@@ -3223,8 +3250,20 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
             }
             else
             {
-                RealmStatuses.Add(new RealmStatusRow(displayName, "Pending", "Pending",
-                    "Waiting for sync", "#F5A623", managed.GameVersion, managed.Id, true));
+                var pending = new RealmStatusRow(
+                    string.IsNullOrWhiteSpace(managed.Region) ? managed.Name : $"{managed.Region.ToUpperInvariant()}-{managed.Name}",
+                    "Pending", "Pending", "Waiting for sync", "#F5A623", managed.GameVersion, managed.Id, true);
+                if (ForeverMarket.IsForever(managed.GameVersion) && ForeverMarket.TryParse(managed.Name, out var market))
+                {
+                    var region = ForeverMarket.RegionCode(managed.Region);
+                    pending = pending with
+                    {
+                        RegionRealm = market.DisplayName(region),
+                        MarketRegion = region,
+                        MarketKey = market.Key
+                    };
+                }
+                RealmStatuses.Add(pending);
             }
         }
 
@@ -3254,6 +3293,11 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     private static bool StatusMatchesRealm(RealmStatusRow row, ManagedRealmSelection realm)
     {
+        if (ForeverMarket.IsForever(row.GameVersion) || ForeverMarket.IsForever(realm.GameVersion))
+            return ForeverMarket.IsForever(row.GameVersion) && ForeverMarket.IsForever(realm.GameVersion) &&
+                   ForeverMarket.TryParse(realm.Name, out var market) &&
+                   row.MarketKey == market.Key && row.MarketRegion == ForeverMarket.RegionCode(realm.Region);
+
         var displayName = string.IsNullOrWhiteSpace(realm.Region)
             ? realm.Name
             : $"{realm.Region.ToUpperInvariant()}-{realm.Name}";

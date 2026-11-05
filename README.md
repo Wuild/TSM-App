@@ -15,7 +15,7 @@ TSM Desktop keeps your TradeSkillMaster data and addons up to date, lets you bro
 ## What you can do
 
 - Keep AppHelper realm data synchronized in the background.
-- Update, reinstall, or remove TSM addons for each detected WoW client.
+- Install AppHelper and update, reinstall, or remove TSM addons for each detected WoW client.
 - Search and filter local Auction House data across your realms.
 - Favorite items and collect local price history over time.
 - Explore gold, sales, purchases, profit, and top items from TSM Accounting.
@@ -40,7 +40,7 @@ Choose an account, realm, player, and time range to see gold history, sales, pur
 
 See which realms and WoW clients were detected, whether AuctionDB data is available, and when each realm was last updated.
 
-![Realm data page showing a synchronized realm](realms.png)
+![Market data page showing a synchronized realm](realms.png)
 
 ### Configure it your way
 
@@ -101,14 +101,14 @@ The AppImage is designed for x86_64 desktop distributions such as Ubuntu, Debian
 2. Select your base **World of Warcraft** directory, which contains client folders such as `_retail_`, `_forever_`, `_classic_`, and `_anniversary_`.
 3. Choose your notification, startup, and tray preferences.
 4. Sign in with your TradeSkillMaster account.
-5. Confirm that TradeSkillMaster and TradeSkillMaster AppHelper are installed for the WoW clients you use.
+5. Install TradeSkillMaster for the WoW clients you use, then use **Addons → Install** to add AppHelper to each client.
 
 The app can find common WoW locations automatically. Saved credentials are stored in Windows Credential Manager, macOS Keychain, or Linux Secret Service; your password is never written to `settings.json`.
 
-WoW: Forever uses `_forever_` and requires TradeSkillMaster 4.15 or later with AppHelper. TSM Desktop can read local Accounting and AppHelper data for Forever. Automatic price downloads depend on the legacy TSM service supplying Forever data.
+WoW: Forever uses `_forever_` and requires TradeSkillMaster 4.15 or later with AppHelper. Accounting uses rulesets, and the Market data and Auction House views distinguish Forever markets by region, ruleset, and faction when that information is available. Automatic price downloads depend on the legacy TSM service supplying Forever data.
 
 > [!TIP]
-> If the Auction House is empty, make sure AppHelper is installed, then synchronize the realm again from the **Realm data** page.
+> If the Auction House is empty, make sure AppHelper is installed, then synchronize the market again from the **Market data** page.
 
 ## How the main features work
 
@@ -120,8 +120,9 @@ Use the realm's **…** menu to synchronize it manually or remove it from the ma
 
 ### Addon management
 
-The **Addons** page lists every detected TSM addon separately for each installed WoW client.
+The **Addons** page lists detected TSM addons and offers AppHelper installation for each detected WoW client.
 
+- **Install** adds the current channel's AppHelper package to the selected client.
 - **Check for updates** compares installed versions with your selected Release or Beta channel.
 - **Reinstall** replaces one addon with the current channel version.
 - **Remove** deletes only the selected addon folder after confirmation.
@@ -130,7 +131,7 @@ Removing an addon does not delete its SavedVariables or other WoW account data.
 
 ### Auction House and favorites
 
-The Auction House reads local AppHelper AuctionDB snapshots. You can search by item name, filter by realm and faction, sort market columns, open item details, and favorite items.
+The Auction House reads local AppHelper AuctionDB snapshots. You can search by item name, filter by market and faction, sort market columns, open item details, and favorite items.
 
 Favoriting an item starts recording price snapshots during future realm synchronizations. Price history is stored locally and cannot be filled retroactively. Item details primarily come from a bundled, read-only SQLite catalog, while visible item images are downloaded from Blizzard's media CDN and cached locally. Online Wowhead enrichment can be disabled under **Settings → Advanced** without disabling local prices.
 

@@ -13,6 +13,8 @@ public sealed class RealmDataService(
         IEnumerable<TsmAccount> accounts,
         IEnumerable<WowInstallation>? installations = null)
     {
+        var accountList = accounts.ToArray();
+        var installationList = (installations ?? []).ToArray();
         var statuses = new Dictionary<string, Dictionary<string, LocalStatus>>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, LocalStatus> GetFlavorStatuses(string flavor)
         {
@@ -21,12 +23,12 @@ public sealed class RealmDataService(
             return flavorStatuses;
         }
 
-        foreach (var account in accounts)
+        foreach (var account in accountList.Where(account => !ForeverMarket.IsForever(account.GameVersion)))
         {
             try
             {
                 var realms = ReadRealms(account.SavedVariablesPath);
-                var region = ReadRegion(account.AppHelperSavedVariablesPath);
+                var region = ReadAppHelperRegion(account.AppHelperSavedVariablesPath).Split('-', 2)[0].ToUpperInvariant();
                 var appData = File.Exists(account.AppDataPath)
                     ? appDataParser.ParseFile(account.AppDataPath)
                     : new AppDataCatalog([]);
@@ -63,7 +65,7 @@ public sealed class RealmDataService(
             }
         }
 
-        foreach (var installation in installations ?? [])
+        foreach (var installation in installationList.Where(installation => !ForeverMarket.IsForever(installation.Name)))
         {
             try
             {
@@ -95,21 +97,119 @@ public sealed class RealmDataService(
         }
 
         return statuses.SelectMany(flavor => flavor.Value.Select(pair => ToRow(pair.Key, flavor.Key, pair.Value)))
+            .Concat(GetForeverStatuses(accountList.Where(account => ForeverMarket.IsForever(account.GameVersion)),
+                installationList.Where(installation => ForeverMarket.IsForever(installation.Name))))
             .OrderBy(row => row.RegionRealm, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
-    private IReadOnlyList<string> ReadRealms(string path)
+    private IEnumerable<RealmStatusRow> GetForeverStatuses(IEnumerable<TsmAccount> accounts,
+        IEnumerable<WowInstallation> installations)
     {
-        var document = savedVariablesParser.ParseFile(path);
-        if (!document.TryGetTable("TradeSkillMasterDB", out var database) ||
-            !database.TryGetTable("_scopeKeys", out var scopeKeys) ||
-            !scopeKeys.TryGetTable("realm", out var realms))
-            return [];
-        return realms.Values.OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var accountRegions = new HashSet<string>();
+        var localMarkets = new HashSet<(string Region, ForeverMarket Market)>();
+        foreach (var account in accounts)
+        {
+            if (File.Exists(account.AppDataPath))
+                paths.Add(account.AppDataPath);
+            try
+            {
+                var region = ForeverMarket.RegionCode(ReadAppHelperRegion(account.AppHelperSavedVariablesPath));
+                if (region.Length > 0)
+                    accountRegions.Add(region);
+                var scopes = ReadScopes(account.SavedVariablesPath);
+                foreach (var scope in ReadScopeValues(scopes, "factionrealm"))
+                {
+                    var separator = scope.IndexOf(" - ", StringComparison.Ordinal);
+                    if (separator > 0 && ForeverMarket.TryParse(
+                            $"{scope[(separator + 3)..]}-{scope[..separator]}", out var market))
+                        localMarkets.Add((region, market));
+                }
+                foreach (var scope in ReadScopeValues(scopes, "realm"))
+                {
+                    if (ForeverMarket.TryParse(scope, out var market))
+                        localMarkets.Add((region, market));
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException)
+            {
+            }
+        }
+
+        foreach (var installation in installations)
+        {
+            try
+            {
+                if (FindAppDataPath(installation.AddOnsPath) is { } path)
+                    paths.Add(path);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        var statuses = new Dictionary<(string Region, ForeverMarket Market), LocalStatus>();
+        var dataRegions = new HashSet<string>();
+        var accountRegion = accountRegions.Count == 1 ? accountRegions.Single() : string.Empty;
+        foreach (var path in paths)
+        {
+            try
+            {
+                var catalog = appDataParser.ParseFile(path);
+                var region = ForeverMarket.GetDataRegion(catalog, accountRegion);
+                if (region.Length > 0)
+                    dataRegions.Add(region);
+                foreach (var entry in catalog.Entries.Where(entry => entry.Type is AuctionDataType or ShoppingDataType))
+                {
+                    if (!ForeverMarket.TryParse(entry.Realm, out var market))
+                        continue;
+                    var key = (region, market);
+                    if (!statuses.TryGetValue(key, out var current))
+                        statuses[key] = current = new LocalStatus();
+                    if (entry.Type == AuctionDataType)
+                        current.AuctionUpdated = Math.Max(current.AuctionUpdated, entry.UpdatedAtUnix);
+                    else
+                        current.ShoppingUpdated = Math.Max(current.ShoppingUpdated, entry.UpdatedAtUnix);
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+
+        var regions = accountRegions.Concat(dataRegions).Distinct().Take(2).ToArray();
+        var fallbackRegion = regions.Length == 1 ? regions[0] : string.Empty;
+        var normalizedLocalMarkets = localMarkets.Select(key =>
+            (Region: key.Region.Length == 0 ? fallbackRegion : key.Region, key.Market)).ToArray();
+        var qualifiedRulesets = normalizedLocalMarkets.Concat(statuses.Keys)
+            .Where(key => key.Market.Faction.Length > 0)
+            .Select(key => (key.Region, key.Market.Ruleset))
+            .ToHashSet();
+        foreach (var key in normalizedLocalMarkets)
+        {
+            if (key.Market.Faction.Length > 0 || !qualifiedRulesets.Contains((key.Region, key.Market.Ruleset)))
+                statuses.TryAdd(key, new LocalStatus());
+        }
+
+        return statuses.Select(pair => ToRow(pair.Key.Market.DisplayName(pair.Key.Region), "Forever", pair.Value)
+            with { MarketRegion = pair.Key.Region, MarketKey = pair.Key.Market.Key });
     }
 
-    private string ReadRegion(string path)
+    private IReadOnlyList<string> ReadRealms(string path) =>
+        ReadScopeValues(ReadScopes(path), "realm").Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    private LuaTable? ReadScopes(string path)
+    {
+        var document = savedVariablesParser.ParseFile(path);
+        return document.TryGetTable("TradeSkillMasterDB", out var database) &&
+               database.TryGetTable("_scopeKeys", out var scopes) ? scopes : null;
+    }
+
+    private static IEnumerable<string> ReadScopeValues(LuaTable? scopes, string scope) =>
+        scopes is not null && scopes.TryGetTable(scope, out var values) ? values.Values.OfType<string>() : [];
+
+    private string ReadAppHelperRegion(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return string.Empty;
@@ -117,7 +217,7 @@ public sealed class RealmDataService(
         if (!document.TryGetTable("TradeSkillMaster_AppHelperDB", out var database) ||
             !database.TryGetString("region", out var region))
             return string.Empty;
-        return region.Split('-', 2)[0].ToUpperInvariant();
+        return region;
     }
 
     private static RealmStatusRow ToRow(string name, string gameVersion, LocalStatus status)

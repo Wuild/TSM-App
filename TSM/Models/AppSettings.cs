@@ -34,7 +34,8 @@ public sealed class AppSettings : ObservableObject
     private string _selectedAccountingAccount = string.Empty;
     private string _selectedAccountingRealm = string.Empty;
     private string _selectedAccountingPlayer = "All players";
-    private string _selectedAuctionRealm = "All realms";
+    internal const string AllAuctionMarkets = "All markets";
+    private string _selectedAuctionRealm = AllAuctionMarkets;
     private string _selectedAuctionFaction = "Both";
     private List<ManagedRealmSelection> _managedRealms = [];
     private List<ManagedRealmSelection> _hiddenLocalRealms = [];
@@ -109,7 +110,7 @@ public sealed class AppSettings : ObservableObject
     {
         get => _selectedAuctionRealm;
         set => SetProperty(ref _selectedAuctionRealm,
-            string.IsNullOrWhiteSpace(value) ? "All realms" : value);
+            string.IsNullOrWhiteSpace(value) ? AllAuctionMarkets : value);
     }
     public string SelectedAuctionFaction
     {
@@ -184,7 +185,7 @@ public sealed record AuctionFavorite(string Flavor, string ItemString);
 
 public sealed record ManagedRealmSelection(string GameVersion, string Region, string Name, string Id)
 {
-    public string DisplayName => string.IsNullOrWhiteSpace(Region)
-        ? $"{Name} · {GameVersion}"
-        : $"{Region.ToUpperInvariant()}-{Name} · {GameVersion}";
+    public string DisplayName => ForeverMarket.IsForever(GameVersion) && ForeverMarket.TryParse(Name, out var market)
+        ? $"Forever · {market.DisplayName(ForeverMarket.RegionCode(Region))}"
+        : string.IsNullOrWhiteSpace(Region) ? $"{Name} · {GameVersion}" : $"{Region.ToUpperInvariant()}-{Name} · {GameVersion}";
 }

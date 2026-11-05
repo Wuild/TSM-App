@@ -141,7 +141,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
         return _variants.Take(12).Select(variant =>
         {
             return new AuctionPriceSnapshotViewModel(
-                variant.Faction,
+                ForeverMarket.IsForever(variant.Flavor) ? variant.RealmFactionDisplay : variant.Faction,
                 variant.Faction switch
                 {
                     "Alliance" => "#4A9EFF",
@@ -245,7 +245,7 @@ public sealed class AuctionHouseItemViewModel : ObservableObject, IDisposable
 }
 
 public sealed record AuctionPriceSnapshotViewModel(
-    string Faction,
+    string Label,
     string FactionColor,
     AuctionMoneyParts MinBuyout,
     AuctionMoneyParts Recent,

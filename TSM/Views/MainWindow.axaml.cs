@@ -404,11 +404,11 @@ public sealed partial class MainWindow : Window
         ResetWindowPlacementToDefaults();
     }
 
-    private async void ReinstallAddonClick(object? sender, RoutedEventArgs e)
+    private async void InstallAddonClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { DataContext: AddonStatusRow addon } &&
             DataContext is MainWindowViewModel viewModel)
-            await viewModel.ReinstallAddonAsync(addon);
+            await viewModel.InstallOrReinstallAddonAsync(addon);
     }
 
     private async void RemoveAddonClick(object? sender, RoutedEventArgs e)
@@ -471,7 +471,7 @@ public sealed partial class MainWindow : Window
                 new Separator(),
                 new MenuItem
                 {
-                    Header = "Remove realm",
+                    Header = ForeverMarket.IsForever(realm.GameVersion) ? "Remove market" : "Remove realm",
                     Command = viewModel.RemoveRealmCommand,
                     IsEnabled = realm.IsManaged
                 }

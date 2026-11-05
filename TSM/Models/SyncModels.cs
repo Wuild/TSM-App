@@ -83,7 +83,9 @@ public sealed class TsmRealmEntry
 
 public sealed record TsmRealmChoice(string GameVersion, string GameLabel, string Region, string Name, string Id)
 {
-    public string DisplayName => $"{GameLabel}-{Region}-{Name}";
+    public string DisplayName => ForeverMarket.IsForever(GameVersion) && ForeverMarket.TryParse(Name, out var market)
+        ? $"{GameLabel} · {market.DisplayName(ForeverMarket.RegionCode(Region))}"
+        : $"{GameLabel}-{Region}-{Name}";
 }
 
 public sealed class TsmDataString

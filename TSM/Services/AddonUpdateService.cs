@@ -5,6 +5,7 @@ namespace TSM.Services;
 
 public sealed class AddonUpdateService(ITsmApiClient apiClient)
 {
+    internal const string AppHelperName = "TradeSkillMaster_AppHelper";
     private const long MaximumArchiveBytes = 100_000_000;
     private const long MaximumExpandedBytes = 250_000_000;
 
@@ -49,6 +50,20 @@ public sealed class AddonUpdateService(ITsmApiClient apiClient)
 
         var archive = await DownloadArchiveAsync(addonName, channel, version, cancellationToken);
         await InstallAsync(addonsDirectory, addonName, archive, cancellationToken);
+    }
+
+    public async Task InstallAppHelperAsync(string addonsDirectory, string version, string channel,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+            throw new InvalidOperationException("TSM did not provide a valid AppHelper package.");
+        if (!Directory.Exists(addonsDirectory))
+            throw new DirectoryNotFoundException("The selected WoW client no longer has an AddOns folder.");
+        if (FindDirectory(addonsDirectory, AppHelperName) is not null)
+            throw new IOException($"The {AppHelperName} addon is already installed in this client.");
+
+        var archive = await DownloadArchiveAsync(AppHelperName, channel, version, cancellationToken);
+        await InstallAsync(addonsDirectory, AppHelperName, archive, cancellationToken, replaceExisting: false);
     }
 
     public static async Task RemoveAsync(
@@ -113,7 +128,7 @@ public sealed class AddonUpdateService(ITsmApiClient apiClient)
         string addonsDirectory,
         string addonName,
         byte[] archive,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool replaceExisting = true)
     {
         var stagingRoot = Path.Combine(addonsDirectory, $".tsm-addon-{Guid.NewGuid():N}");
         var stagedAddon = Path.Combine(stagingRoot, addonName);
@@ -141,6 +156,15 @@ public sealed class AddonUpdateService(ITsmApiClient apiClient)
 
             if (FindFile(stagedAddon, addonName + ".toc") is null)
                 throw new InvalidDataException($"The {addonName} archive does not contain its expected TOC file.");
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!replaceExisting)
+            {
+                if (FindDirectory(addonsDirectory, addonName) is not null)
+                    throw new IOException($"The {addonName} addon is already installed in this client.");
+                Directory.Move(stagedAddon, destination);
+                return;
+            }
 
             Directory.Move(destination, rollback);
             try
