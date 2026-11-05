@@ -43,6 +43,7 @@ fi
 test -s "$app_dir/com.wuild.TSMDesktop.png"
 test -L "$app_dir/.DirIcon"
 
+chmod -R a+rX "$app_dir"
 ARCH="$appimage_arch" VERSION="$version" APPIMAGE_EXTRACT_AND_RUN=1 \
   "$appimagetool" "$app_dir" "$output_dir/TSM-${version}-${appimage_arch}.AppImage"
 chmod +x "$output_dir/TSM-${version}-${appimage_arch}.AppImage"
