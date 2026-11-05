@@ -3296,6 +3296,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     private static string FormatGameFlavor(string gameVersion) => gameVersion switch
     {
         "retail" => "Retail",
+        "forever" => "Forever",
         "bcc" => "Progression",
         "classic" => "Classic Era",
         "anniversary" => "Anniversary",

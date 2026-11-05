@@ -42,32 +42,34 @@ public sealed partial class AuctionHouseService(
             var regionEntries = catalog.Entries
                 .Where(entry => entry.Type == "AUCTIONDB_REGION_SALE")
                 .ToArray();
-            var selectedRegion = source.Region;
-            if (string.IsNullOrWhiteSpace(selectedRegion))
+            var normalRegion = source.Region;
+            Dictionary<string, DecodedAuctionRow>? hardcoreSales = null;
+            if (string.Equals(source.Flavor, "Forever", StringComparison.OrdinalIgnoreCase))
             {
-                var availableRegions = regionEntries.Select(entry => entry.Realm)
-                    .Where(region => region.Length > 0)
-                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-                if (availableRegions.Length == 1)
-                    selectedRegion = availableRegions[0];
+                if (normalRegion.EndsWith("-HC", StringComparison.OrdinalIgnoreCase))
+                    normalRegion = normalRegion[..^3];
+                var hardcoreRegion = normalRegion.Length == 0 ? string.Empty : normalRegion + "-HC";
+                hardcoreSales = BuildRegionalSales(regionEntries.Where(entry =>
+                    entry.Realm.StartsWith("Forever-HC-", StringComparison.OrdinalIgnoreCase)).ToArray(),
+                    hardcoreRegion);
+                regionEntries = regionEntries.Where(entry =>
+                    !entry.Realm.StartsWith("Forever-HC-", StringComparison.OrdinalIgnoreCase)).ToArray();
             }
-            var regionalSales = regionEntries
-                .Where(entry => RegionKeysMatch(entry.Realm, selectedRegion))
-                .SelectMany(ParseEntry)
-                .GroupBy(row => BaseItemString(row.ItemString), StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
+            var regionalSales = BuildRegionalSales(regionEntries, normalRegion);
 
             foreach (var entry in catalog.Entries.Where(entry =>
                          entry.Type.StartsWith("AUCTIONDB_", StringComparison.Ordinal) &&
                          !entry.Type.StartsWith("AUCTIONDB_REGION_", StringComparison.Ordinal)))
             {
+                var sales = hardcoreSales is not null && entry.Realm.StartsWith("Hardcore-",
+                    StringComparison.OrdinalIgnoreCase) ? hardcoreSales : regionalSales;
                 foreach (var decoded in ParseEntry(entry))
                 {
                     var key = (source.Flavor, entry.Realm, decoded.ItemString);
                     if (!rows.TryGetValue(key, out var current))
                         current = new MutableRow(source.Flavor, entry.Realm, decoded.ItemString);
                     current.Apply(decoded, entry.UpdatedAtUnix);
-                    if (regionalSales.TryGetValue(BaseItemString(decoded.ItemString), out var regionalSale))
+                    if (sales.TryGetValue(BaseItemString(decoded.ItemString), out var regionalSale))
                         current.ApplyRegionalSale(regionalSale);
                     rows[key] = current;
                 }
@@ -78,6 +80,22 @@ public sealed partial class AuctionHouseService(
             .OrderBy(row => row.ItemName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(row => row.Realm, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    private static Dictionary<string, DecodedAuctionRow> BuildRegionalSales(IReadOnlyList<AppDataEntry> entries,
+        string region)
+    {
+        if (string.IsNullOrWhiteSpace(region))
+        {
+            var availableRegions = entries.Select(entry => entry.Realm)
+                .Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            if (availableRegions.Length == 1)
+                region = availableRegions[0];
+        }
+        return entries.Where(entry => RegionKeysMatch(entry.Realm, region))
+            .SelectMany(ParseEntry)
+            .GroupBy(row => BaseItemString(row.ItemString), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
     }
 
     internal static IReadOnlyList<DecodedAuctionRow> ParseEntry(AppDataEntry entry)

@@ -35,6 +35,12 @@ public sealed class TsmStatusResponse
     [JsonPropertyName("extraAnniversaryRegions")]
     public List<TsmRealmEntry> AnniversaryRegions { get; init; } = [];
 
+    [JsonPropertyName("extraForeverRealms")]
+    public List<TsmRealmEntry> ForeverRealms { get; init; } = [];
+
+    [JsonPropertyName("extraForeverRegions")]
+    public List<TsmRealmEntry> ForeverRegions { get; init; } = [];
+
     [JsonPropertyName("addonMessage")]
     public TsmAddonMessage AddonMessage { get; init; } = new();
 }

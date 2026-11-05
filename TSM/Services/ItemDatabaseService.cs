@@ -239,6 +239,8 @@ public sealed class ItemDatabaseService
     private static string ResolveFlavor(string flavor)
     {
         var value = flavor.Trim().ToLowerInvariant();
+        if (value == "forever")
+            return "forever";
         if (value.Contains("anniversary", StringComparison.Ordinal) || value is "tbc" or "bcc")
             return "tbc";
         if (value is "classic" || value.Contains("era", StringComparison.Ordinal) ||

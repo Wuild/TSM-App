@@ -305,6 +305,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
     private static string NormalizeGameVersion(string value) => value.Trim().ToLowerInvariant() switch
     {
         "retail" => "retail",
+        "forever" => "forever",
         "bcc" => "bcc",
         "tbc" => "tbc",
         "progression" => "progression",
@@ -321,6 +322,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
     private static string GameVersionLabel(string gameVersion) => gameVersion switch
     {
         "retail" => "Retail",
+        "forever" => "Forever",
         "bcc" or "tbc" or "progression" => "Progression",
         "classic" or "vanilla" or "classic_era" => "Classic Era",
         "anniversary" => "Anniversary",
@@ -649,7 +651,7 @@ public sealed class TsmLegacyApiClient : ITsmApiClient, IDisposable
 
     private static IReadOnlySet<string> AllowedGameVersions { get; } =
         new HashSet<string>(
-            ["retail", "bcc", "tbc", "progression", "classic", "vanilla", "classic_era", "anniversary", "mop", "mists", "classic_mop"],
+            ["retail", "forever", "bcc", "tbc", "progression", "classic", "vanilla", "classic_era", "anniversary", "mop", "mists", "classic_mop"],
             StringComparer.OrdinalIgnoreCase);
 
     private static IReadOnlySet<string> UploadEndpoints { get; } =

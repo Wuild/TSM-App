@@ -98,12 +98,14 @@ The AppImage is designed for x86_64 desktop distributions such as Ubuntu, Debian
 ## First-time setup
 
 1. Open TSM Desktop.
-2. Select your base **World of Warcraft** directory—the folder containing `_retail_`, `_classic_`, `_anniversary_`, or other client folders.
+2. Select your base **World of Warcraft** directory, which contains client folders such as `_retail_`, `_forever_`, `_classic_`, and `_anniversary_`.
 3. Choose your notification, startup, and tray preferences.
 4. Sign in with your TradeSkillMaster account.
 5. Confirm that TradeSkillMaster and TradeSkillMaster AppHelper are installed for the WoW clients you use.
 
 The app can find common WoW locations automatically. Saved credentials are stored in Windows Credential Manager, macOS Keychain, or Linux Secret Service; your password is never written to `settings.json`.
+
+WoW: Forever uses `_forever_` and requires TradeSkillMaster 4.15 or later with AppHelper. TSM Desktop can read local Accounting and AppHelper data for Forever. Automatic price downloads depend on the legacy TSM service supplying Forever data.
 
 > [!TIP]
 > If the Auction House is empty, make sure AppHelper is installed, then synchronize the realm again from the **Realm data** page.
@@ -167,7 +169,7 @@ Access and session tokens remain in memory. Application errors, stack traces, an
 
 ### The app did not find World of Warcraft
 
-Open **Settings → General** and select the base World of Warcraft folder, not an individual client or addon folder. It should contain directories such as `_retail_`, `_classic_`, or `_anniversary_`.
+Open **Settings → General** and select the base World of Warcraft folder. It should contain client directories such as `_retail_`, `_forever_`, `_classic_`, or `_anniversary_`.
 
 ### Auction House data is missing
 

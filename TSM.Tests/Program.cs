@@ -23,6 +23,7 @@ var tests = new (string Name, Func<Task> Execute)[]
     ("creates synchronizes and restores Premium backups", PremiumBackups),
     ("records and combines sync and application logs", Run(CombineApplicationLogs)),
     ("syncs faction-qualified anniversary realm data", SyncFactionQualifiedRealm),
+    ("discovers and syncs Forever separately from other WoW clients", SyncForever),
     ("discovers PTR client variants", Run(DiscoverPtrVariants)),
     ("detects newly installed clients and local accounts", Run(DetectLocalInstallationChanges)),
     ("safely updates, reinstalls, and removes addons", UpdateInstalledAddon),
@@ -793,7 +794,7 @@ static async Task AuthenticateAndSyncAppData()
         Assert(login.Success && client.IsAuthenticated, "legacy authentication flow failed");
         Assert(handler.SawSignedApiRequest, "API request signature parameters were missing");
         var availableRealms = await client.GetAvailableRealmsAsync();
-        Assert(availableRealms.Count == 2 && availableRealms.Any(realm => realm.DisplayName == "Retail-US-Aegwynn") &&
+        Assert(availableRealms.Count == 3 && availableRealms.Any(realm => realm.DisplayName == "Retail-US-Aegwynn") &&
                availableRealms.Any(realm => realm.DisplayName == "Progression-EU-Amnennar-Alliance"),
             "available realm list was not parsed");
         handler.RealmPayload = """{"success":true,"data":[]}""";
@@ -806,6 +807,10 @@ static async Task AuthenticateAndSyncAppData()
         await client.RemoveRealmAsync(progressionRealm.GameVersion, progressionRealm.Region,
             progressionRealm.Name);
         Assert(handler.SawRealmRemove, "realm remove endpoint was not called with the selected region and name");
+        var foreverRealm = availableRealms.Single(realm => realm.GameVersion == "forever");
+        Assert(foreverRealm.DisplayName == "Forever-EU-Normal-Alliance", "Forever realm was not labeled correctly");
+        await client.AddRealmAsync(foreverRealm.GameVersion, foreverRealm.Id);
+        await client.RemoveRealmAsync(foreverRealm.GameVersion, foreverRealm.Region, foreverRealm.Name);
         var uploadPath = new[] { "US", "RHJhZW5vcg==", "QUNDT1VOVCMx" };
         Assert(await client.GetLastUploadAsync("sales", uploadPath) == 0,
             "upload checkpoint was not read");
@@ -897,6 +902,99 @@ static async Task SyncFactionQualifiedRealm()
     finally
     {
         Directory.Delete(temporaryRoot, true);
+    }
+}
+
+static async Task SyncForever()
+{
+    var root = Path.Combine(Path.GetTempPath(), $"tsm-forever-tests-{Guid.NewGuid():N}");
+    var forever = Path.Combine(root, "_forever_");
+    var addons = Path.Combine(forever, "Interface", "AddOns");
+    var helper = Path.Combine(addons, "TradeSkillMaster_AppHelper");
+    var retailHelper = Path.Combine(root, "_retail_", "Interface", "AddOns", "TradeSkillMaster_AppHelper");
+    var savedVariables = Path.Combine(forever, "WTF", "Account", "ACCOUNT#1", "SavedVariables");
+    Directory.CreateDirectory(helper);
+    Directory.CreateDirectory(retailHelper);
+    Directory.CreateDirectory(savedVariables);
+
+    try
+    {
+        File.WriteAllText(Path.Combine(helper, "TradeSkillMaster_AppHelper.toc"), "## Version: 4.15.2");
+        File.WriteAllText(Path.Combine(savedVariables, "TradeSkillMaster.lua"),
+            SavedVariablesFixture().Replace("Draenor", "Normal", StringComparison.Ordinal));
+        var discovery = new WowInstallationService();
+        var installations = discovery.Discover(root);
+        var foreverClient = installations.Single(client => client.Name == "Forever");
+        Assert(foreverClient.RootPath == forever && foreverClient.AddOnsPath == addons,
+            "Forever did not resolve its own client and addon paths");
+        Assert(discovery.ScanAddons(installations).Any(addon => addon.ClientName == "Forever"),
+            "the installed Forever addon was not discovered");
+
+        var status = JsonSerializer.Deserialize<TsmStatusResponse>("""
+            {
+              "realms":[{"name":"Normal","region":"EU","appDataStrings":{
+                "AUCTIONDB_NON_COMMODITY_DATA":{"url":"https://data.example.test/retail.gz","lastModified":1700000200}
+              }}],
+              "extraForeverRealms":[{"name":"Normal-Alliance","region":"Forever-EU","appDataStrings":{
+                "AUCTIONDB_NON_COMMODITY_DATA":{"url":"https://data.example.test/forever.gz","lastModified":1700000300}
+              }}],
+              "extraForeverRegions":[{"name":"Forever-EU","appDataStrings":{
+                "AUCTIONDB_REGION_SALE":{"url":"https://data.example.test/forever-eu.gz","lastModified":1700000400}
+              }}]
+            }
+            """)!;
+        var api = new FakeApiClient(status);
+        var parser = new AppDataCatalogParser();
+        var lua = new LuaSavedVariablesParser();
+        var accounting = new AccountingService(lua);
+        var service = new AppDataSyncService(api, parser, new AppDataFileWriter(parser), accounting);
+        var account = accounting.FindAccounts(installations).Single();
+        Assert(account.GameVersion == "Forever" && accounting.FindRealms(account).SequenceEqual(["Normal"]),
+            "Forever Accounting did not find the saved ruleset");
+
+        var result = await service.SyncAsync(installations, [account], "Release");
+        Assert(result.Errors.Count == 0 && result.DownloadedEntries == 3 && result.WrittenFiles == 2,
+            "the separate Forever realm and regional datasets did not sync");
+        var foreverData = parser.ParseFile(Path.Combine(helper, "AppData.lua"));
+        var retailData = parser.ParseFile(Path.Combine(retailHelper, "AppData.lua"));
+        Assert(foreverData.LastUpdate("AUCTIONDB_NON_COMMODITY_DATA", "Normal-Alliance") == 1700000300 &&
+               foreverData.LastUpdate("AUCTIONDB_REGION_SALE", "Forever-EU") == 1700000400 &&
+               foreverData.LastUpdate("AUCTIONDB_NON_COMMODITY_DATA", "Normal") == 0 &&
+               retailData.LastUpdate("AUCTIONDB_NON_COMMODITY_DATA", "Normal-Alliance") == 0,
+            "AppHelper data crossed client boundaries or lost its server key");
+        var statuses = new RealmDataService(lua, parser).GetRealmStatuses([account], installations);
+        Assert(statuses.Count == 2 && statuses.All(row => row.RegionRealm == "Normal" && row.AuctionDb == "Available") &&
+               statuses.Select(row => row.GameVersion).ToHashSet().SetEquals(["Forever", "Retail"]),
+            "realm data from clients with the same market name was merged");
+
+        var foreverAppDataPath = Path.Combine(helper, "AppData.lua");
+        await new AppDataFileWriter(parser).WriteAsync(foreverAppDataPath,
+        [
+            new("AUCTIONDB_NON_COMMODITY_DATA", "Normal-Alliance",
+                "{fields={\"itemString\",\"minBuyout\"},data={{273946,1}}}", 1700000500),
+            new("AUCTIONDB_NON_COMMODITY_DATA", "Hardcore-Alliance",
+                "{fields={\"itemString\",\"minBuyout\"},data={{273946,2}}}", 1700000500),
+            new("AUCTIONDB_REGION_SALE", "Forever-EU",
+                "{fields={\"itemString\",\"regionSale\"},data={{273946,3}}}", 1700000500),
+            new("AUCTIONDB_REGION_SALE", "Forever-HC-EU",
+                "{fields={\"itemString\",\"regionSale\"},data={{273946,4}}}", 1700000500)
+        ]);
+        await File.WriteAllTextAsync(account.AppHelperSavedVariablesPath,
+            "TradeSkillMaster_AppHelperDB = { region = 'EU-Forever-HC' }");
+        var auctionRows = new AuctionHouseService(parser, lua).BuildIndex(
+            [account with { AppDataPath = foreverAppDataPath }], installations);
+        Assert(auctionRows.Single(row => row.Realm == "Normal-Alliance").RegionSaleAverage == 3 &&
+               auctionRows.Single(row => row.Realm == "Hardcore-Alliance").RegionSaleAverage == 4,
+            "Forever regional sale data crossed rulesets");
+
+        var backup = new BackupService(new AppPaths(Path.Combine(root, "data")), api, () => "system").CreateNow(account);
+        Assert(backup.Account == "ACCOUNT#1-Forever", "Forever backups reused the Retail account key");
+        Assert(ItemIconService.BuildItemPageUri("i:273946", "Forever")?.AbsoluteUri ==
+               "https://www.wowhead.com/forever/item=273946", "Forever items linked to the wrong Wowhead database");
+    }
+    finally
+    {
+        Directory.Delete(root, true);
     }
 }
 
@@ -1068,7 +1166,7 @@ static void Assert(bool condition, string message)
 sealed class FakeTsmHandler : HttpMessageHandler
 {
     public string RealmPayload { get; set; } =
-        """{"data":{"retail":{"US":[{"realmId":123,"realmName":"Aegwynn"}]},"bcc":{"EU":[{"serverId":456,"name":"Amnennar-Alliance"}]}},"success":true}""";
+        """{"data":{"retail":{"US":[{"realmId":123,"realmName":"Aegwynn"}]},"bcc":{"EU":[{"serverId":456,"name":"Amnennar-Alliance"}]},"forever":{"EU":[{"id":789,"name":"Normal-Alliance"}]}},"success":true}""";
     public int RequestCount { get; private set; }
     public int DataDownloadCount { get; private set; }
     public int AddonDownloadCount { get; private set; }
@@ -1119,14 +1217,16 @@ sealed class FakeTsmHandler : HttpMessageHandler
         if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath == "/v2/realms2/list")
             return Json(RealmPayload);
 
-        if (uri.Host == "app-server.tradeskillmaster.com" && uri.AbsolutePath == "/v2/realms2/add/retail/123")
+        if (uri.Host == "app-server.tradeskillmaster.com" &&
+            uri.AbsolutePath is "/v2/realms2/add/retail/123" or "/v2/realms2/add/forever/789")
         {
             SawRealmAdd = HasSignature(uri.Query);
             return Json("""{"success":true}""");
         }
 
         if (uri.Host == "app-server.tradeskillmaster.com" &&
-            uri.AbsolutePath == "/v2/realms2/remove/bcc/EU/Amnennar-Alliance")
+            uri.AbsolutePath is "/v2/realms2/remove/bcc/EU/Amnennar-Alliance" or
+                "/v2/realms2/remove/forever/EU/Normal-Alliance")
         {
             SawRealmRemove = HasSignature(uri.Query);
             return Json("""{"success":true}""");

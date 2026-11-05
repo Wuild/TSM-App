@@ -166,6 +166,7 @@ public sealed class BackupService(AppPaths paths, ITsmApiClient apiClient, Func<
             "Classic Era" => "-Classic",
             "Classic" => "-Progression",
             "Anniversary" => "-Anniversary",
+            "Forever" => "-Forever",
             _ => string.Empty
         };
         return account.AccountName + suffix;

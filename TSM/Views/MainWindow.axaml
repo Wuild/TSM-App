@@ -1429,7 +1429,7 @@
                     <Grid ColumnDefinitions="*,*" ColumnSpacing="26" RowDefinitions="Auto,Auto" RowSpacing="24">
                       <StackPanel Spacing="8">
                         <TextBlock Text="Getting started" FontSize="12" FontWeight="SemiBold" />
-                        <TextBlock Text="Choose the World of Warcraft folder containing client folders such as _retail_ or _anniversary_. TradeSkillMaster and AppHelper must already be installed in each client you want to use."
+                        <TextBlock Text="Choose the World of Warcraft folder containing client folders such as _retail_, _forever_, or _anniversary_. TradeSkillMaster and AppHelper must already be installed in each client you want to use."
                                    Classes="muted" FontSize="10" TextWrapping="Wrap" LineHeight="16" />
                       </StackPanel>
                       <StackPanel Grid.Column="1" Spacing="8">
@@ -1641,7 +1641,7 @@
             <StackPanel Spacing="8">
               <TextBlock Text="World of Warcraft folder" FontSize="11" FontWeight="SemiBold" />
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <TextBox Text="{Binding Settings.WowPath}" PlaceholderText="Select the folder containing _retail_, _classic_, etc."
+                <TextBox Text="{Binding Settings.WowPath}" PlaceholderText="Select the folder containing _retail_, _forever_, etc."
                          VerticalContentAlignment="Center" />
                 <Button Grid.Column="1" Content="Browse…" Click="BrowseWowDirectory" />
               </Grid>

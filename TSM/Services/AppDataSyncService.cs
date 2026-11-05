@@ -173,6 +173,7 @@ public sealed class AppDataSyncService(
     private static Mapping? SelectMapping(string gameDirectory, TsmStatusResponse status) => gameDirectory switch
     {
         "_retail_" or "_retail_beta_" or "_retail_ptr_" or "_ptr_" => new Mapping(status.Realms, status.Regions, false),
+        "_forever_" => new Mapping(status.ForeverRealms, status.ForeverRegions, false),
         "_classic_" or "_classic_beta_" or "_classic_ptr_" => new Mapping(status.ProgressionRealms, status.ProgressionRegions, true),
         "_classic_era_" or "_classic_era_ptr_" => new Mapping(status.ClassicRealms, status.ClassicRegions, true),
         "_anniversary_" or "_anniversary_ptr_" => new Mapping(status.AnniversaryRealms, status.AnniversaryRegions, true),

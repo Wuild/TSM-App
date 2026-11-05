@@ -13,7 +13,14 @@ public sealed class RealmDataService(
         IEnumerable<TsmAccount> accounts,
         IEnumerable<WowInstallation>? installations = null)
     {
-        var statuses = new Dictionary<string, LocalStatus>(StringComparer.OrdinalIgnoreCase);
+        var statuses = new Dictionary<string, Dictionary<string, LocalStatus>>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, LocalStatus> GetFlavorStatuses(string flavor)
+        {
+            if (!statuses.TryGetValue(flavor, out var flavorStatuses))
+                statuses[flavor] = flavorStatuses = new(StringComparer.OrdinalIgnoreCase);
+            return flavorStatuses;
+        }
+
         foreach (var account in accounts)
         {
             try
@@ -23,18 +30,18 @@ public sealed class RealmDataService(
                 var appData = File.Exists(account.AppDataPath)
                     ? appDataParser.ParseFile(account.AppDataPath)
                     : new AppDataCatalog([]);
+                var flavorStatuses = GetFlavorStatuses(account.GameVersion);
 
                 foreach (var realm in realms)
                 {
                     var key = string.IsNullOrWhiteSpace(region) ? realm : $"{region}-{realm}";
                     var auctionUpdated = LastUpdateForRealm(appData, AuctionDataType, realm);
                     var shoppingUpdated = LastUpdateForRealm(appData, ShoppingDataType, realm);
-                    if (!statuses.TryGetValue(key, out var current))
+                    if (!flavorStatuses.TryGetValue(key, out var current))
                         current = new LocalStatus();
-                    current.GameVersion = account.GameVersion;
                     current.AuctionUpdated = Math.Max(current.AuctionUpdated, auctionUpdated);
                     current.ShoppingUpdated = Math.Max(current.ShoppingUpdated, shoppingUpdated);
-                    statuses[key] = current;
+                    flavorStatuses[key] = current;
                 }
 
                 foreach (var entry in appData.Entries.Where(entry =>
@@ -42,14 +49,13 @@ public sealed class RealmDataService(
                 {
                     var realm = NormalizeDataRealm(entry.Realm);
                     var key = string.IsNullOrWhiteSpace(region) ? realm : $"{region}-{realm}";
-                    if (!statuses.TryGetValue(key, out var current))
+                    if (!flavorStatuses.TryGetValue(key, out var current))
                         current = new LocalStatus();
-                    current.GameVersion = account.GameVersion;
                     if (entry.Type == AuctionDataType)
                         current.AuctionUpdated = Math.Max(current.AuctionUpdated, entry.UpdatedAtUnix);
                     else
                         current.ShoppingUpdated = Math.Max(current.ShoppingUpdated, entry.UpdatedAtUnix);
-                    statuses[key] = current;
+                    flavorStatuses[key] = current;
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or LuaParseException)
@@ -65,22 +71,22 @@ public sealed class RealmDataService(
                 if (appDataPath is null)
                     continue;
                 var appData = appDataParser.ParseFile(appDataPath);
+                var flavorStatuses = GetFlavorStatuses(installation.Name);
                 foreach (var entry in appData.Entries.Where(entry =>
                              entry.Type is AuctionDataType or ShoppingDataType && entry.Realm.Length > 0))
                 {
                     var realm = NormalizeDataRealm(entry.Realm);
-                    var key = statuses.Keys.FirstOrDefault(existing =>
+                    var key = flavorStatuses.Keys.FirstOrDefault(existing =>
                                   string.Equals(existing, realm, StringComparison.OrdinalIgnoreCase) ||
                                   existing.EndsWith("-" + realm, StringComparison.OrdinalIgnoreCase))
                               ?? realm;
-                    if (!statuses.TryGetValue(key, out var current))
+                    if (!flavorStatuses.TryGetValue(key, out var current))
                         current = new LocalStatus();
-                    current.GameVersion = installation.Name;
                     if (entry.Type == AuctionDataType)
                         current.AuctionUpdated = Math.Max(current.AuctionUpdated, entry.UpdatedAtUnix);
                     else
                         current.ShoppingUpdated = Math.Max(current.ShoppingUpdated, entry.UpdatedAtUnix);
-                    statuses[key] = current;
+                    flavorStatuses[key] = current;
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -88,8 +94,8 @@ public sealed class RealmDataService(
             }
         }
 
-        return statuses.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(pair => ToRow(pair.Key, pair.Value))
+        return statuses.SelectMany(flavor => flavor.Value.Select(pair => ToRow(pair.Key, flavor.Key, pair.Value)))
+            .OrderBy(row => row.RegionRealm, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
@@ -114,7 +120,7 @@ public sealed class RealmDataService(
         return region.Split('-', 2)[0].ToUpperInvariant();
     }
 
-    private static RealmStatusRow ToRow(string name, LocalStatus status)
+    private static RealmStatusRow ToRow(string name, string gameVersion, LocalStatus status)
     {
         var lastUpdated = Math.Max(status.AuctionUpdated, status.ShoppingUpdated);
         return new RealmStatusRow(
@@ -123,7 +129,7 @@ public sealed class RealmDataService(
             status.ShoppingUpdated > 0 ? "Available" : "Missing",
             FormatTimestamp(lastUpdated),
             status.AuctionUpdated > 0 ? "#51CF92" : "#F5A623",
-            status.GameVersion);
+            gameVersion);
     }
 
     private static long LastUpdateForRealm(AppDataCatalog catalog, string type, string localRealm) =>
@@ -176,6 +182,5 @@ public sealed class RealmDataService(
     {
         public long AuctionUpdated { get; set; }
         public long ShoppingUpdated { get; set; }
-        public string GameVersion { get; set; } = string.Empty;
     }
 }

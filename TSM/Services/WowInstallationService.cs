@@ -8,6 +8,7 @@ public sealed partial class WowInstallationService
     private static readonly (string Folder, string Name)[] Variants =
     [
         ("_retail_", "Retail"),
+        ("_forever_", "Forever"),
         ("_classic_", "Classic"),
         ("_classic_era_", "Classic Era"),
         ("_anniversary_", "Anniversary"),

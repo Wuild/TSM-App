@@ -459,6 +459,8 @@ public sealed partial class ItemIconService : IDisposable
     private static string ResolveFlavorKey(string flavor)
     {
         var value = flavor.Trim().ToLowerInvariant();
+        if (value == "forever")
+            return "forever";
         if (value.Contains("anniversary", StringComparison.Ordinal) || value is "bcc" or "tbc")
             return "tbc";
         if (value.Contains("classic era", StringComparison.Ordinal) && value.Contains("ptr", StringComparison.Ordinal))
@@ -483,6 +485,7 @@ public sealed partial class ItemIconService : IDisposable
 
     private static Uri BuildTooltipUri(string itemId, string flavorKey) => flavorKey switch
     {
+        "forever" => new Uri($"https://nether.wowhead.com/forever/tooltip/item/{itemId}"),
         "classic" => new Uri($"https://nether.wowhead.com/classic/tooltip/item/{itemId}"),
         "classic-ptr" => new Uri($"https://nether.wowhead.com/classic-ptr/tooltip/item/{itemId}"),
         "tbc" => new Uri($"https://nether.wowhead.com/tbc/tooltip/item/{itemId}"),
@@ -500,6 +503,7 @@ public sealed partial class ItemIconService : IDisposable
         var itemId = match.Groups["id"].Value;
         var flavorPath = ResolveFlavorKey(flavor) switch
         {
+            "forever" => "forever/",
             "classic" => "classic/",
             "classic-ptr" => "classic-ptr/",
             "tbc" => "tbc/",
